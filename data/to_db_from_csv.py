@@ -273,14 +273,34 @@ async def load_data_to_postgres() -> None:
 
     dsn = find_dsn()
 
+    # 1. Загружаем и трансформируем компании
     company_path = find_csv((COMPANY_CSV_NAME,))
-    raw_companies = pd.read_csv(company_path,dtype={"inn": "string"},)
+    raw_companies = pd.read_csv(company_path, dtype={"inn": "string"})
     companies_df = transform_companies(raw_companies)
+    
+    print(f"[INFO] Загружено компаний из CSV: {len(companies_df)}")
+    print(f"[INFO] Примеры ИНН компаний: {companies_df['inn'].head(10).tolist()}")
 
+    # 2. Загружаем и трансформируем финансовые отчеты
     financial_path = find_csv((FINANCIAL_CSV_NAME,))
-    raw_financials = pd.read_csv(financial_path,dtype={"inn": "string"},)
+    raw_financials = pd.read_csv(financial_path, dtype={"inn": "string"})
     financial_df = transform_financials(raw_financials)
+    
+    print(f"[INFO] Загружено финансовых отчетов из CSV: {len(financial_df)}")
+    
+    # 3. ФИЛЬТРАЦИЯ: оставляем только те отчеты, где компания существует
+    valid_inns = set(companies_df['inn'].dropna())
+    missing_inns = set(financial_df['inn'].dropna()) - valid_inns
+    
+    if missing_inns:
+        print(f"[WARNING] Найдено {len(missing_inns)} ИНН в financial, которых нет в companies")
+        print(f"[WARNING] Примеры отсутствующих ИНН: {list(missing_inns)[:10]}")
+        
+        # Фильтруем financial_df, оставляя только существующие компании
+        financial_df = financial_df[financial_df['inn'].isin(valid_inns)]
+        print(f"[INFO] После фильтрации осталось отчетов: {len(financial_df)}")
 
+    # 4. Загружаем данные
     await insert_dataframe(
         dsn=dsn,
         database=DATABASE,

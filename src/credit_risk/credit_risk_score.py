@@ -3,63 +3,47 @@ import json
 import math
 from pathlib import Path
 
-if __package__:
+if __package__:  # запуск как пакета: python -m src.credit_risk.credit_risk_score
+    from . import config
     from .apis_fns_example import FNSApi
-else:
+    from .internal_api import InternalApi
+else:  # запуск из каталога src/credit_risk
+    import config
     from apis_fns_example import FNSApi
+    from internal_api import InternalApi
 
-WEIGHTS_PATH = Path(__file__).resolve().parents[1] / "data" / "weight.json"
 
-FINANCIAL_BLOCK_NAMES = (
-    "market_position",
-    "size",
-    "profitability",
-    "debt_load",
-    "debt_service",
-    "liquidity",
-    "cash_flow",
-)
-
-LINE_TO_COLUMN = {
-    "line_2110": "revenue",
-    "line_1370": "retained_earnings",
-    "line_1600": "assets",
-    "line_1300": "total_equity",
-    "line_2200": "profit_from_sales",
-    "line_2300": "before_tax",
-    "line_2330": "interest_payable",
-    "line_2400": "net_profit",
-    "line_1410": "longterm_debt",
-    "line_1510": "shortterm_debt",
-    "line_1250": "cash_equivalents",
-    "line_1200": "current_assets",
-    "line_1500": "shortterm_liab",
-    "line_4100": "balance_operating",
-}
-
-def read_weights(path: str | Path = WEIGHTS_PATH) -> dict:
+def read_weights(path: str | Path = config.WEIGHTS_PATH) -> dict:
     with open(path, encoding="utf-8") as file:
         return json.load(file)
 
 
 class Credit_Risk_Score:
-    AGE_THRESHOLDS = (1.0, 10.0)  # возраст, лет
-    PROFIT_FROM_SALES_MARGIN = (0.0, 0.15)  # 2200 / 2110
-    BEFORE_TAX_MARGIN = (0.0, 0.12)  # 2300 / 2110
-    NET_PROFIT_MARGIN = (0.0, 0.10)  # 2400 / 2110
-    DEBT_TO_EQUITY = (3.0, 0.5)  # Долг / 1300 (a > b: чем меньше, тем лучше)
-    NET_DEBT_TO_EBITDA = (6.0, 1.0)  # (Долг - 1250) / 2200 (a > b)
-    DEBT_SERVICE_COVERAGE = (1.0, 5.0)  # (2300 + 2330) / 2330
-    CFO_TO_REVENUE = (0.0, 0.10)  # 4100 / 2110
-    CFO_TO_DEBT = (0.0, 0.3)  # 4100 / Долг
+    AGE_THRESHOLDS = config.AGE_THRESHOLDS  # возраст, лет
+    PROFIT_FROM_SALES_MARGIN = config.PROFIT_FROM_SALES_MARGIN  # 2200 / 2110
+    BEFORE_TAX_MARGIN = config.BEFORE_TAX_MARGIN  # 2300 / 2110
+    NET_PROFIT_MARGIN = config.NET_PROFIT_MARGIN  # 2400 / 2110
+    DEBT_TO_EQUITY = config.DEBT_TO_EQUITY  # Долг / 1300 (a > b: чем меньше, тем лучше)
+    NET_DEBT_TO_EBITDA = config.NET_DEBT_TO_EBITDA  # (Долг - 1250) / 2200 (a > b)
+    DEBT_SERVICE_COVERAGE = config.DEBT_SERVICE_COVERAGE  # (2300 + 2330) / 2330
+    CFO_TO_REVENUE = config.CFO_TO_REVENUE  # 4100 / 2110
+    CFO_TO_DEBT = config.CFO_TO_DEBT  # 4100 / Долг
 
-    def __init__(self, dsn: str | None = None, api: FNSApi | None = None, weights_path: str | Path = WEIGHTS_PATH):
+    def __init__(
+        self,
+        dsn: str | None = None,
+        api: FNSApi | None = None,
+        internal_api: InternalApi | None = None,
+        weights_path: str | Path = config.WEIGHTS_PATH,
+    ):
         """
         :param dsn: DSN PostgreSQL (по умолчанию берётся из env DB_CONNECT/DB_DSN)
         :param api: готовый FNSApi (удобно подменять в тестах)
+        :param internal_api: готовое InternalApi (по умолчанию использует self.api)
         :param weights_path: путь к weight.json
         """
         self.api = api or FNSApi(dsn=dsn)
+        self.internal_api = internal_api or InternalApi(api=self.api)
         self.weights = read_weights(weights_path)
 
         self.inn: str | None = None
@@ -140,7 +124,7 @@ class Credit_Risk_Score:
                 raise ValueError(f"Нет финансовой отчётности ИНН {inn} за {year} год")
             self.financial = statements
 
-        self.percentiles = await self.api.get_scoring_percentiles(inn, int(year))
+        self.percentiles = await self.internal_api.get_scoring_percentiles(inn, int(year))
         return self.score()
 
     async def calculate_manual(self, inn: str, year: int, financial: dict) -> dict:
@@ -170,7 +154,7 @@ class Credit_Risk_Score:
 
         available = {name: item["score"] for name, item in blocks.items() if item["score"] is not None}
         missing_blocks = [name for name in blocks if blocks[name]["score"] is None]
-        financial_blocks = [name for name in available if name in FINANCIAL_BLOCK_NAMES]
+        financial_blocks = [name for name in available if name in config.FINANCIAL_BLOCK_NAMES]
         total_weight = sum(block_weights[name] for name in available)
         if total_weight > 0 and financial_blocks:
             s_total = sum(block_weights[name] * available[name] for name in available) / total_weight
@@ -479,7 +463,7 @@ class Credit_Risk_Score:
         normalized = {}
         for key, value in (financial or {}).items():
             key_str = str(key).strip()
-            normalized[LINE_TO_COLUMN.get(key_str, key_str)] = value
+            normalized[config.LINE_TO_COLUMN.get(key_str, key_str)] = value
         return normalized
 
     @staticmethod
