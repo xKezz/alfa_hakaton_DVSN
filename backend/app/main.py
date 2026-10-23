@@ -15,6 +15,7 @@ from psycopg.rows import dict_row
 
 from . import db
 from .config import get_settings
+from .loan_applications import router as loan_applications_router
 from .schemas import (
     AuthUser,
     Company,
@@ -154,6 +155,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(loan_applications_router)
 
 
 @app.get("/", response_model=ServiceInfo, summary="Информация о сервисе", tags=["service"])

@@ -8,7 +8,7 @@ const API_URL = (import.meta.env.VITE_API_URL || "http://localhost:8000").replac
   ""
 );
 
-const REQUEST_TIMEOUT_MS = 4000;
+const REQUEST_TIMEOUT_MS = 20000;
 
 async function request(path, options = {}) {
   const controller = new AbortController();
@@ -416,4 +416,125 @@ export async function getLoanProducts({
   }
 
   return { ok: true, products: payload };
+}
+
+
+/**
+ * Создание кредитной заявки: backend выполняет скоринг и возвращает карточку.
+ * Возвращает { ok: true, application } либо { ok: false, message }.
+ */
+export async function createLoanApplication(payload) {
+  let result;
+  try {
+    result = await request("/api/loan-applications", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    return {
+      ok: false,
+      message: "API недоступен. Проверьте, запущен ли backend на " + API_URL + ".",
+    };
+  }
+  const { response, payload: body } = result;
+  if (response.ok && body) return { ok: true, application: body };
+  if (response.status === 503) {
+    return { ok: false, message: normalizeDetail(body) || "База данных недоступна" };
+  }
+  return {
+    ok: false,
+    message: normalizeDetail(body) || "Не удалось создать заявку",
+  };
+}
+
+/** Список заявок: по ИНН клиента или очередь сотрудника по статусу. */
+export async function getLoanApplications({ inn, status, limit = 50 } = {}) {
+  const params = new URLSearchParams();
+  if (inn) params.set("inn", inn);
+  if (status) params.set("status", status);
+  params.set("limit", String(limit));
+
+  let result;
+  try {
+    result = await request(`/api/loan-applications?${params.toString()}`);
+  } catch {
+    return { ok: false, message: "API недоступен", applications: [] };
+  }
+  const { response, payload } = result;
+  if (response.ok && Array.isArray(payload)) {
+    return { ok: true, applications: payload };
+  }
+  return {
+    ok: false,
+    applications: [],
+    message: normalizeDetail(payload) || "Не удалось получить список заявок",
+  };
+}
+
+/** Карточка заявки: статус, скоринг, офферы, решение, история. */
+export async function getLoanApplication(applicationId) {
+  let result;
+  try {
+    result = await request(`/api/loan-applications/${encodeURIComponent(applicationId)}`);
+  } catch {
+    return { ok: false, message: "API недоступен" };
+  }
+  const { response, payload } = result;
+  if (response.ok && payload) return { ok: true, application: payload };
+  return {
+    ok: false,
+    message: normalizeDetail(payload) || "Не удалось получить заявку",
+  };
+}
+
+/** Клиент выбирает альтернативное предложение. */
+export async function selectLoanOffer(applicationId, offerId) {
+  return updateOffer(applicationId, offerId, "select");
+}
+
+/** Клиент отказывается от альтернативного предложения. */
+export async function declineLoanOffer(applicationId, offerId) {
+  return updateOffer(applicationId, offerId, "decline");
+}
+
+async function updateOffer(applicationId, offerId, action) {
+  let result;
+  try {
+    result = await request(
+      `/api/loan-applications/${encodeURIComponent(applicationId)}/offers/${encodeURIComponent(offerId)}/${action}`,
+      { method: "POST" }
+    );
+  } catch {
+    return { ok: false, message: "API недоступен" };
+  }
+  const { response, payload } = result;
+  if (response.ok && payload) return { ok: true, application: payload };
+  return {
+    ok: false,
+    message: normalizeDetail(payload) || "Не удалось обновить предложение",
+  };
+}
+
+/** Решение сотрудника по заявке из ручной проверки. */
+export async function decideLoanApplication(applicationId, payload) {
+  let result;
+  try {
+    result = await request(
+      `/api/loan-applications/${encodeURIComponent(applicationId)}/decision`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      }
+    );
+  } catch {
+    return { ok: false, message: "API недоступен" };
+  }
+  const { response, payload: body } = result;
+  if (response.ok && body) return { ok: true, application: body };
+  return {
+    ok: false,
+    message: normalizeDetail(body) || "Не удалось сохранить решение",
+  };
 }

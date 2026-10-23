@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Button, Modal, StatusBadge, Timeline } from "../components/ui.jsx";
+import { Button, StatusBadge, Timeline } from "../components/ui.jsx";
 import {
   STEPS,
   STATUS_META,
@@ -9,7 +9,7 @@ import {
   formatRate,
 } from "../data/mock.js";
 
-const FINAL_STATUSES = ["approved", "issued", "declined"];
+const FINAL_STATUSES = ["approved", "declined", "issued"];
 
 function stepperState(status) {
   const meta = STATUS_META[status] || STATUS_META.submitted;
@@ -18,15 +18,43 @@ function stepperState(status) {
   return { meta, isFinal, reached };
 }
 
-export default function ApplicationDetails({ application, onBack, onAccept, onChooseAlternative }) {
-  const [isModalOpen, setIsModalOpen] = useState(false);
+function RateValue({ value }) {
+  return <>{value === null || value === undefined ? "по продукту" : formatRate(value)}</>;
+}
+
+export default function ApplicationDetails({
+  application,
+  onBack,
+  onSelectOffer,
+  onDeclineOffer,
+}) {
+  const [busyOfferId, setBusyOfferId] = useState(null);
+  const [actionError, setActionError] = useState("");
 
   const { meta, isFinal, reached } = stepperState(application.status);
   const lineProgress = reached / (STEPS.length - 1);
 
+  const isOfferPending = application.status === "offer_pending";
   const isApproved = application.status === "approved";
   const isIssued = application.status === "issued";
   const isDeclined = application.status === "declined";
+  const isManual = application.status === "manual_review";
+  const pendingOffers = (application.offers || []).filter(
+    (offer) => offer.status === "offered"
+  );
+
+  async function handleOffer(action, offerId) {
+    setActionError("");
+    setBusyOfferId(offerId);
+    try {
+      if (action === "select") await onSelectOffer(application.id, offerId);
+      else await onDeclineOffer(application.id, offerId);
+    } catch (error) {
+      setActionError(error.message || "Не удалось обновить предложение");
+    } finally {
+      setBusyOfferId(null);
+    }
+  }
 
   return (
     <div className="page">
@@ -75,12 +103,57 @@ export default function ApplicationDetails({ application, onBack, onAccept, onCh
         </section>
 
         <section className="card detail-card">
+          {isOfferPending && (
+            <>
+              <h2 className="result-title">Доступны альтернативные предложения</h2>
+              <p className="result-text">
+                Выбранный продукт не подошёл по рейтингу. Система подобрала продукты из
+                доступных вам вариантов. Выберите одно предложение или откажитесь от него.
+              </p>
+              <div className="alternatives">
+                {pendingOffers.map((offer) => (
+                  <div className="alternative-card" key={offer.id}>
+                    <div>
+                      <div className="alternative-title">{offer.title}</div>
+                      <div className="alternative-meta">
+                        {formatMoney(offer.amount)} · <RateValue value={offer.rate} /> ·{" "}
+                        {formatMonths(offer.termMonths)}
+                      </div>
+                    </div>
+                    <div className="row" style={{ gap: 8 }}>
+                      <Button
+                        variant="secondary"
+                        size="sm"
+                        loading={busyOfferId === offer.id}
+                        onClick={() => handleOffer("select", offer.id)}
+                      >
+                        Выбрать
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        loading={busyOfferId === offer.id}
+                        onClick={() => handleOffer("decline", offer.id)}
+                      >
+                        Отказаться
+                      </Button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              {actionError && (
+                <div className="notice notice-warn" style={{ marginTop: 16 }}>
+                  {actionError}
+                </div>
+              )}
+            </>
+          )}
+
           {isApproved && (
             <>
-              <h2 className="result-title">Предложение одобрено</h2>
+              <h2 className="result-title">Заявка одобрена</h2>
               <p className="result-text">
-                Продукт уже проверен по правилам прототипа. Подтвердите условия, чтобы оформить
-                кредит — повторный скоринг не потребуется.
+                Решение зафиксировано по правилам банка. Повторный скоринг не требуется.
               </p>
               <div className="conditions-grid">
                 <div>
@@ -91,7 +164,7 @@ export default function ApplicationDetails({ application, onBack, onAccept, onCh
                 </div>
                 <div>
                   <div className="condition-label">Ставка</div>
-                  <div className="condition-value">{formatRate(application.offer?.rate ?? 13)}</div>
+                  <div className="condition-value"><RateValue value={application.offer?.rate} /></div>
                 </div>
                 <div>
                   <div className="condition-label">Срок</div>
@@ -99,11 +172,6 @@ export default function ApplicationDetails({ application, onBack, onAccept, onCh
                     {formatMonths(application.offer?.termMonths ?? application.termMonths)}
                   </div>
                 </div>
-              </div>
-              <div className="detail-actions">
-                <Button variant="dark" onClick={() => setIsModalOpen(true)}>
-                  Принять предложение
-                </Button>
               </div>
             </>
           )}
@@ -124,7 +192,7 @@ export default function ApplicationDetails({ application, onBack, onAccept, onCh
                 </div>
                 <div>
                   <div className="condition-label">Ставка</div>
-                  <div className="condition-value">{formatRate(application.offer?.rate ?? 13)}</div>
+                  <div className="condition-value"><RateValue value={application.offer?.rate} /></div>
                 </div>
                 <div>
                   <div className="condition-label">Срок</div>
@@ -141,47 +209,24 @@ export default function ApplicationDetails({ application, onBack, onAccept, onCh
               <h2 className="result-title">По заявке получен отказ</h2>
               <p className="result-text">
                 {application.declineReason ||
-                  "Продукт не прошёл проверки по правилам демонстрационного прототипа."}
+                  "Подходящих альтернативных продуктов не найдено, заявка отклонена."}
               </p>
-              {application.alternatives && application.alternatives.length > 0 ? (
-                <>
-                  <h3 className="result-title" style={{ fontSize: 15, marginTop: 20 }}>
-                    Доступные альтернативы
-                  </h3>
-                  <div className="alternatives">
-                    {application.alternatives.map((alternative) => (
-                      <div className="alternative-card" key={alternative.id}>
-                        <div>
-                          <div className="alternative-title">{alternative.title}</div>
-                          <div className="alternative-meta">
-                            {formatMoney(alternative.amount)} · {formatRate(alternative.rate)} ·{" "}
-                            {formatMonths(alternative.termMonths)}
-                          </div>
-                        </div>
-                        <Button
-                          variant="secondary"
-                          size="sm"
-                          onClick={() => onChooseAlternative(application.id, alternative)}
-                        >
-                          Выбрать
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ) : (
-                <p className="notice" style={{ marginTop: 18 }}>
-                  Подходящих альтернативных продуктов не найдено.
+              {application.offers && application.offers.length > 0 && (
+                <p className="hint-sm" style={{ marginTop: 12 }}>
+                  Предложения:{" "}
+                  {application.offers
+                    .map((offer) => `${offer.title} (${offer.status === "declined" ? "отказ" : offer.status})`)
+                    .join("; ")}
                 </p>
               )}
             </>
           )}
 
-          {!isApproved && !isIssued && !isDeclined && (
+          {!isApproved && !isIssued && !isDeclined && !isOfferPending && (
             <>
               <h2 className="result-title">Заявка находится на рассмотрении</h2>
               <p className="result-text">
-                {application.status === "manual_review"
+                {isManual
                   ? "Заявка передана сотруднику банка на ручную проверку. Результат появится в кабинете после принятия решения."
                   : application.status === "processing"
                     ? "Система проверяет данные и рассчитывает скоринг. Информация обновится автоматически."
@@ -203,9 +248,46 @@ export default function ApplicationDetails({ application, onBack, onAccept, onCh
                   </div>
                 </div>
               </div>
+              {isManual && application.routingReason && (
+                <p className="hint-sm" style={{ marginTop: 12 }}>
+                  Причина передачи сотруднику: {application.routingReason}
+                </p>
+              )}
             </>
           )}
         </section>
+
+        {application.scoring && application.scoring.rating !== null && (
+          <section className="card detail-card">
+            <h2 className="result-title" style={{ marginBottom: 14 }}>
+              Результат скоринга
+            </h2>
+            <div className="conditions-grid">
+              <div>
+                <div className="condition-label">Кредитный рейтинг</div>
+                <div className="condition-value">{application.scoring.rating} / 1000</div>
+              </div>
+              <div>
+                <div className="condition-label">Категория риска</div>
+                <div className="condition-value">{application.scoring.risk_category || "—"}</div>
+              </div>
+              <div>
+                <div className="condition-label">Скоринг по продукту</div>
+                <div className="condition-value">
+                  {application.scoring.product_scoring !== null &&
+                  application.scoring.product_scoring !== undefined
+                    ? application.scoring.product_scoring
+                    : "—"}
+                </div>
+              </div>
+            </div>
+            {application.scoring.routing_reason && (
+              <p className="hint-sm" style={{ marginTop: 12 }}>
+                Маршрут: {application.scoring.routing_reason}
+              </p>
+            )}
+          </section>
+        )}
 
         <section className="card detail-card">
           <h2 className="result-title" style={{ marginBottom: 18 }}>
@@ -214,33 +296,6 @@ export default function ApplicationDetails({ application, onBack, onAccept, onCh
           <Timeline events={application.history} />
         </section>
       </div>
-
-      <Modal
-        open={isModalOpen}
-        title="Подтверждение"
-        onClose={() => setIsModalOpen(false)}
-        actions={
-          <>
-            <Button variant="secondary" onClick={() => setIsModalOpen(false)}>
-              Отмена
-            </Button>
-            <Button
-              variant="primary"
-              onClick={() => {
-                setIsModalOpen(false);
-                onAccept(application.id);
-              }}
-            >
-              Подтвердить
-            </Button>
-          </>
-        }
-      >
-        Вы соглашаетесь с условиями кредитования и подтверждаете оформление кредита на сумму{" "}
-        {formatMoney(application.offer?.amount ?? application.amount)} сроком{" "}
-        {formatMonths(application.offer?.termMonths ?? application.termMonths)} по ставке{" "}
-        {formatRate(application.offer?.rate ?? 13)}. Условия демонстрационные.
-      </Modal>
     </div>
   );
 }

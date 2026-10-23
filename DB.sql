@@ -88,6 +88,7 @@ CREATE TABLE loan_applications (
     loan_purpose VARCHAR(50),
     application_status VARCHAR(30) NOT NULL DEFAULT 'submitted',
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT fk_loan_applications_company
         FOREIGN KEY (inn)

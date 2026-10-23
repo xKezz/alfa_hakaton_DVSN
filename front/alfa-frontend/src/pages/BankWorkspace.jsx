@@ -7,8 +7,13 @@ import {
   Tabs,
   Timeline,
 } from "../components/ui.jsx";
-import { getCompany } from "../api.js";
-import { formatDate, formatMoney, formatMonths } from "../data/mock.js";
+import {
+  getCompany,
+  getFinancialStatements,
+  getLatestFinancialStatement,
+  getLoanApplication,
+} from "../api.js";
+import { formatDate, formatDateTime, formatMoney, formatMonths } from "../data/mock.js";
 
 const TABS = [
   { id: "company", label: "Компания" },
@@ -21,8 +26,147 @@ const TABS = [
 const DECISION_OPTIONS = [
   { id: "approve", label: "Одобрить" },
   { id: "reject", label: "Отказать" },
-  { id: "alternative", label: "Альтернативные условия" },
 ];
+
+const EVENT_TITLES = {
+  application_submitted: "Заявка подана",
+  processing_started: "Начата автоматическая проверка",
+  scoring_calculated: "Скоринг завершён",
+  manual_review_assigned: "Заявка передана на ручную проверку",
+  offer_created: "Сформировано альтернативное предложение",
+  offer_selected: "Клиент выбрал предложение",
+  offer_declined: "Клиент отказался от предложения",
+  decision_made: "Принято решение",
+  status_changed: "Статус обновлён",
+};
+
+const BLOCK_LABELS = {
+  industry: "Отраслевой риск",
+  market_position: "Рыночная позиция",
+  business_profile: "Профиль бизнеса",
+  size: "Размер бизнеса",
+  profitability: "Рентабельность",
+  debt_load: "Долговая нагрузка",
+  debt_service: "Обслуживание долга",
+  liquidity: "Ликвидность",
+  cash_flow: "Денежный поток",
+};
+
+function mapBankDetail(detail, latestStatement, statementRows) {
+  const scoring = detail.scoring || {};
+  const factors = scoring.scoring_factors || {};
+  const blocks = factors.blocks || {};
+  const rating = scoring.rating;
+
+  const positives = [];
+  const negatives = [];
+  Object.entries(blocks).forEach(([key, block]) => {
+    if (!block) return;
+    const label = BLOCK_LABELS[key] || key;
+    if (block.score !== null && block.score !== undefined && block.score >= 0.65) {
+      positives.push(label);
+    }
+    if (block.score === null || block.score === undefined || block.score < 0.35) {
+      negatives.push(label);
+    }
+  });
+  if (positives.length === 0) positives.push("Заявка прошла проверку данных");
+  if (negatives.length === 0 && scoring.routing_reason) negatives.push(scoring.routing_reason);
+
+  const finance = latestStatement
+    ? [
+        { label: `Выручка (${latestStatement.report_year})`, value: latestStatement.revenue, delta: null },
+        { label: `Чистая прибыль (${latestStatement.report_year})`, value: latestStatement.net_profit, delta: null },
+        { label: "Краткосрочные обязательства", value: latestStatement.shortterm_liab, delta: null },
+      ]
+    : [];
+
+  const years = (statementRows || []).slice(0, 4).reverse();
+  const revenues = years.map((row) => Number(row.revenue) || 0);
+  const maxRevenue = Math.max(1, ...revenues);
+  const chart = years.map((row, index) => ({
+    year: String(row.report_year),
+    value: Math.max(8, Math.round((revenues[index] / maxRevenue) * 100)),
+  }));
+
+  const level =
+    rating === null || rating === undefined
+      ? "mid"
+      : rating >= 700
+        ? "low"
+        : rating >= 450
+          ? "mid"
+          : "high";
+  const history = (detail.history || []).map((event) => ({
+    title: EVENT_TITLES[event.event_type] || event.event_type,
+    date: formatDateTime(event.created_at),
+    desc: event.event_description || "",
+  }));
+
+  const checks = [
+    {
+      ok: !scoring.has_error,
+      text: scoring.has_error ? "Ошибка расчёта скоринга" : "Скоринг выполнен без ошибок",
+    },
+    {
+      ok: rating !== null && rating !== undefined,
+      text: `Кредитный рейтинг: ${rating ?? "—"} из 1000`,
+    },
+    {
+      ok: !scoring.employee_rout,
+      text: scoring.routing_reason
+        ? `Причина передачи: ${scoring.routing_reason}`
+        : "Автоматических причин ручной проверки нет",
+    },
+  ];
+
+  return {
+    id: detail.application_id,
+    date: detail.created_at,
+    amount: Number(detail.requested_amount),
+    termMonths: detail.requested_term_months,
+    reason: scoring.routing_reason || "Передана сотруднику",
+    status: detail.status,
+    companyInn: detail.inn,
+    companyName: detail.company_name,
+    finance,
+    chart,
+    scoring: {
+      score: rating || 0,
+      category: scoring.risk_category || "—",
+      level,
+      route: detail.status === "manual_review" ? "Ручная проверка" : "Автоматическая проверка",
+      positives,
+      negatives,
+    },
+    checks,
+    history,
+  };
+}
+
+function fallbackBankApplication(summary) {
+  return {
+    id: summary.id,
+    date: summary.date,
+    amount: summary.amount,
+    termMonths: summary.termMonths,
+    reason: summary.reason,
+    status: summary.status,
+    companyInn: summary.companyInn,
+    finance: [],
+    chart: [],
+    scoring: {
+      score: summary.rating || 0,
+      category: summary.riskCategory || "—",
+      level: "mid",
+      route: "Загрузка данных…",
+      positives: [],
+      negatives: [],
+    },
+    checks: [],
+    history: [],
+  };
+}
 
 function BankApplicationPanel({ application, company, companyError, isCompanyLoading, onDecision }) {
   const [activeTab, setActiveTab] = useState("company");
@@ -30,8 +174,9 @@ function BankApplicationPanel({ application, company, companyError, isCompanyLoa
   const [reason, setReason] = useState("");
   const [success, setSuccess] = useState("");
   const [formError, setFormError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event) {
+  async function handleSubmit(event) {
     event.preventDefault();
     if (!decision) {
       setFormError("Выберите решение по заявке");
@@ -42,9 +187,16 @@ function BankApplicationPanel({ application, company, companyError, isCompanyLoa
       return;
     }
     setFormError("");
+    setIsSubmitting(true);
     const label = DECISION_OPTIONS.find((option) => option.id === decision)?.label;
-    setSuccess(`Решение «${label}» зафиксировано. Заявка обновлена.`);
-    onDecision(application.id, decision, reason.trim());
+    try {
+      await onDecision(application.id, decision, reason.trim());
+      setSuccess(`Решение «${label}» зафиксировано. Заявка обновлена в БД.`);
+    } catch (error) {
+      setFormError(error.message || "Не удалось сохранить решение");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -264,6 +416,7 @@ function BankApplicationPanel({ application, company, companyError, isCompanyLoa
               <Button
                 type="submit"
                 variant="dark"
+                loading={isSubmitting}
                 disabled={!decision || reason.trim().length < 5}
               >
                 Зафиксировать решение
@@ -286,6 +439,7 @@ export default function BankWorkspace({ queue, onDecision }) {
   const selectedCompanyInn = selected?.companyInn ?? null;
 
   const [companyState, setCompanyState] = useState({ inn: null, company: null, error: "" });
+  const [detailState, setDetailState] = useState({ id: null, application: null, error: "" });
 
   const company = companyState.inn === selectedCompanyInn ? companyState.company : null;
   const companyError = companyState.inn === selectedCompanyInn ? companyState.error : "";
@@ -307,6 +461,43 @@ export default function BankWorkspace({ queue, onDecision }) {
       active = false;
     };
   }, [selectedCompanyInn]);
+
+  const selectedApplicationId = selected?.id ?? null;
+  useEffect(() => {
+    if (!selectedApplicationId) return undefined;
+    let active = true;
+    Promise.all([
+      getLoanApplication(selectedApplicationId),
+      selectedCompanyInn
+        ? getLatestFinancialStatement(selectedCompanyInn)
+        : Promise.resolve({ ok: false }),
+      selectedCompanyInn
+        ? getFinancialStatements(selectedCompanyInn)
+        : Promise.resolve({ ok: false, statements: [] }),
+    ]).then(([detailResult, latestResult, listResult]) => {
+      if (!active) return;
+      if (!detailResult.ok) {
+        setDetailState({
+          id: selectedApplicationId,
+          application: null,
+          error: detailResult.message,
+        });
+        return;
+      }
+      setDetailState({
+        id: selectedApplicationId,
+        application: mapBankDetail(
+          detailResult.application,
+          latestResult.ok ? latestResult.statement : null,
+          listResult.ok ? listResult.statements : []
+        ),
+        error: "",
+      });
+    });
+    return () => {
+      active = false;
+    };
+  }, [selectedApplicationId, selectedCompanyInn]);
 
   return (
     <div className="page">
@@ -351,9 +542,17 @@ export default function BankWorkspace({ queue, onDecision }) {
           {selected && (
             <BankApplicationPanel
               key={selected.id}
-              application={selected}
+              application={
+                detailState.id === selected.id && detailState.application
+                  ? detailState.application
+                  : fallbackBankApplication(selected)
+              }
               company={company}
-              companyError={companyError}
+              companyError={
+                detailState.id === selected.id
+                  ? detailState.error || companyError
+                  : companyError
+              }
               isCompanyLoading={isCompanyLoading}
               onDecision={onDecision}
             />

@@ -9,14 +9,17 @@ export const STATUS_META = {
   submitted: { label: "Подана", badge: "processing", step: 0 },
   processing: { label: "На проверке", badge: "processing", step: 1 },
   manual_review: { label: "На ручной проверке", badge: "manual", step: 2 },
+  offer_pending: { label: "Есть предложения", badge: "manual", step: 2 },
   approved: { label: "Одобрено", badge: "approved", step: 3 },
   issued: { label: "Кредит выдан", badge: "issued", step: 4 },
   declined: { label: "Отказ", badge: "declined", step: 3 },
+  rejected: { label: "Отказ", badge: "declined", step: 3 },
 };
 
 export const STATUS_FILTERS = [
   { value: "all", label: "Все" },
   { value: "active", label: "В работе" },
+  { value: "offer_pending", label: "Предложения" },
   { value: "approved", label: "Одобрено" },
   { value: "issued", label: "Выдан" },
   { value: "declined", label: "Отказ" },
@@ -74,8 +77,8 @@ export function monthlyPayment(amount, annualRate, months) {
   return (sum * monthRate) / (1 - Math.pow(1 + monthRate, -term));
 }
 
-/** ИНН реальной компании из таблицы companies, используемой в прототипе. */
-export const COMPANY_INN = "3257029840";
+/** ИНН компании демо-клиента (совпадает с login.company_inn для client). */
+export const COMPANY_INN = "4217064416";
 
 export const BUSINESS_TYPES = [
   { value: "ip", label: "Для ИП" },

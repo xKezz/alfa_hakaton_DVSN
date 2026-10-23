@@ -77,6 +77,10 @@ export default function ProfilePage({ company, health }) {
   const [financialStatus, setFinancialStatus] = useState({ state: "idle", message: "" });
   const [financialReload, setFinancialReload] = useState(0);
 
+  // Компания аккаунта — источник истины для ИНН; старое значение в
+  // localStorage может быть демо-данными другой компании.
+  const profileForm = company?.inn ? { ...formData, inn: company.inn } : formData;
+
   useEffect(() => {
     const inn = company?.inn;
     if (!inn) return undefined;
@@ -120,7 +124,7 @@ export default function ProfilePage({ company, health }) {
 
   function handleSave(event) {
     event.preventDefault();
-    localStorage.setItem("ipProfile", JSON.stringify(formData));
+    localStorage.setItem("ipProfile", JSON.stringify(profileForm));
     setSaved(true);
   }
 
@@ -253,22 +257,35 @@ export default function ProfilePage({ company, health }) {
           <h2 className="profile-section-title">Личные данные</h2>
           <div className="profile-grid">
             <Field label="Фамилия" htmlFor="lastName">
-              <input id="lastName" className="input" name="lastName" value={formData.lastName} onChange={handleChange} placeholder="Введите фамилию" />
+              <input id="lastName" className="input" name="lastName" value={profileForm.lastName} onChange={handleChange} placeholder="Введите фамилию" />
             </Field>
             <Field label="Имя" htmlFor="firstName">
-              <input id="firstName" className="input" name="firstName" value={formData.firstName} onChange={handleChange} placeholder="Введите имя" />
+              <input id="firstName" className="input" name="firstName" value={profileForm.firstName} onChange={handleChange} placeholder="Введите имя" />
             </Field>
             <Field label="Отчество" htmlFor="middleName">
-              <input id="middleName" className="input" name="middleName" value={formData.middleName} onChange={handleChange} placeholder="Введите отчество" />
+              <input id="middleName" className="input" name="middleName" value={profileForm.middleName} onChange={handleChange} placeholder="Введите отчество" />
             </Field>
             <Field label="Дата рождения" htmlFor="birthDate">
-              <input id="birthDate" className="input" type="date" name="birthDate" value={formData.birthDate} onChange={handleChange} />
+              <input id="birthDate" className="input" type="date" name="birthDate" value={profileForm.birthDate} onChange={handleChange} />
             </Field>
-            <Field label="ИНН" htmlFor="profileInn" hint="10 цифр для ООО, 12 — для ИП">
-              <input id="profileInn" className="input" name="inn" value={formData.inn} onChange={handleChange} placeholder="Введите ИНН" inputMode="numeric" maxLength={12} />
+            <Field
+              label="ИНН"
+              htmlFor="profileInn"
+              hint="Определяется компанией, к которой привязан аккаунт"
+            >
+              <input
+                id="profileInn"
+                className="input is-readonly"
+                name="inn"
+                value={profileForm.inn}
+                readOnly
+                placeholder="ИНН компании аккаунта"
+                inputMode="numeric"
+                maxLength={12}
+              />
             </Field>
             <Field label="ОГРНИП / ОГРН" htmlFor="ogrnip">
-              <input id="ogrnip" className="input" name="ogrnip" value={formData.ogrnip} onChange={handleChange} placeholder="Введите ОГРНИП" inputMode="numeric" maxLength={15} />
+              <input id="ogrnip" className="input" name="ogrnip" value={profileForm.ogrnip} onChange={handleChange} placeholder="Введите ОГРНИП" inputMode="numeric" maxLength={15} />
             </Field>
           </div>
         </div>
@@ -277,10 +294,10 @@ export default function ProfilePage({ company, health }) {
           <h2 className="profile-section-title">Информация о бизнесе</h2>
           <div className="profile-grid">
             <Field label="Название бизнеса" htmlFor="businessName">
-              <input id="businessName" className="input" name="businessName" value={formData.businessName} onChange={handleChange} placeholder="Название вашего бизнеса" />
+              <input id="businessName" className="input" name="businessName" value={profileForm.businessName} onChange={handleChange} placeholder="Название вашего бизнеса" />
             </Field>
             <Field label="Сфера деятельности" htmlFor="activity">
-              <select id="activity" className="input" name="activity" value={formData.activity} onChange={handleChange}>
+              <select id="activity" className="input" name="activity" value={profileForm.activity} onChange={handleChange}>
                 <option value="">Выберите сферу</option>
                 <option value="Торговля">Торговля</option>
                 <option value="Услуги">Услуги</option>
@@ -291,7 +308,7 @@ export default function ProfilePage({ company, health }) {
               </select>
             </Field>
             <Field label="Система налогообложения" htmlFor="taxSystem">
-              <select id="taxSystem" className="input" name="taxSystem" value={formData.taxSystem} onChange={handleChange}>
+              <select id="taxSystem" className="input" name="taxSystem" value={profileForm.taxSystem} onChange={handleChange}>
                 <option value="">Выберите систему</option>
                 <option value="УСН «Доходы»">УСН «Доходы»</option>
                 <option value="УСН «Доходы минус расходы»">УСН «Доходы минус расходы»</option>
@@ -308,13 +325,13 @@ export default function ProfilePage({ company, health }) {
           <h2 className="profile-section-title">Контактные данные</h2>
           <div className="profile-grid">
             <Field label="Номер телефона" htmlFor="phone">
-              <input id="phone" className="input" type="tel" name="phone" value={formData.phone} onChange={handleChange} placeholder="+7 (___) ___-__-__" />
+              <input id="phone" className="input" type="tel" name="phone" value={profileForm.phone} onChange={handleChange} placeholder="+7 (___) ___-__-__" />
             </Field>
             <Field label="Электронная почта" htmlFor="email">
-              <input id="email" className="input" type="email" name="email" value={formData.email} onChange={handleChange} placeholder="example@mail.ru" />
+              <input id="email" className="input" type="email" name="email" value={profileForm.email} onChange={handleChange} placeholder="example@mail.ru" />
             </Field>
             <Field label="Адрес регистрации" htmlFor="address" className="field-full">
-              <input id="address" className="input" name="address" value={formData.address} onChange={handleChange} placeholder="Город, улица, дом" />
+              <input id="address" className="input" name="address" value={profileForm.address} onChange={handleChange} placeholder="Город, улица, дом" />
             </Field>
           </div>
         </div>

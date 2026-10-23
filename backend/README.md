@@ -1,9 +1,11 @@
 # Backend — кредитование ИП/ООО (Alfa Hakaton)
 
-Минимальный backend на **Python 3.12 + FastAPI + PostgreSQL**.
-Сейчас сервис умеет только две вещи: сообщать состояние (`/health`) и отдавать
-карточку компании по ИНН (`/api/companies/{inn}`). Бизнес-логика кредитования,
-аутентификация и работа с заявками появятся позже.
+Backend на **Python 3.12 + FastAPI + PostgreSQL** для кредитования ИП/ООО.
+Сервис отдаёт состояние (`/health`), карточку компании по ИНН, каталог и подбор
+кредитных продуктов, финансовую отчётность, авторизацию из таблицы `login`,
+а также полный цикл кредитной заявки: вызов существующего алгоритма скоринга
+(`src/credit_risk`), сохранение рейтинга, автоматическое решение или передача
+заявки сотруднику.
 
 ## Стек
 
@@ -14,6 +16,7 @@
 | Uvicorn           | 0.34.0                |
 | psycopg (3)       | 3.2.3                 |
 | pydantic-settings | 2.7.1                 |
+| asyncpg           | 0.30.0                |
 | PostgreSQL        | 14+ (проверено на 18) |
 
 ## Структура
@@ -26,10 +29,15 @@ backend/
 ├── README.md
 └── app/
     ├── __init__.py
-    ├── config.py       # pydantic-settings: DATABASE_URL / PG*, APP_*, CORS_ORIGINS
-    ├── db.py           # psycopg3: connection, ping()
-    ├── main.py         # FastAPI app, CORS, роуты
-    └── schemas.py      # pydantic-модели ответов
+    ├── config.py            # pydantic-settings: DATABASE_URL / PG*, APP_*, CORS_ORIGINS
+    ├── db.py                # psycopg3: connection, ping()
+    ├── main.py              # FastAPI app, CORS, роуты
+    ├── schemas.py           # pydantic-модели запросов/ответов
+    ├── scoring_service.py   # адаптер к существующему алгоритму src/credit_risk
+    └── loan_applications.py # создание заявки, скоринг, авто/ручная проверка
+backend/tests/               # unittest: формулы, маршрутизация, интеграция с БД
+src/credit_risk/             # существующий алгоритм скоринга (формулы не менялись)
+src/data/weight.json         # веса и пороги алгоритма
 ```
 
 ## Требования
@@ -108,10 +116,18 @@ INSERT INTO companies (
     ('770123456789', 'ИП Иванов Иван Иванович', '2020-07-01', 'active', '47', '50', TRUE, FALSE);
 ```
 
-Backend использует только таблицу `companies`. Поля `company_name`,
-`registration_date`, `company_status`, `industry`, `region_code`,
-`is_simplified_tax`, `dissolution_flag` могут быть `NULL` — API возвращает их
-как `null`.
+В текущей схеме `loan_applications` добавлено неразрушающее поле
+`updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP` (для даты последнего
+обновления статуса). В уже существующей БД оно создаётся запросом:
+
+```sql
+ALTER TABLE loan_applications
+    ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP;
+```
+
+Поля компании `company_name`, `registration_date`, `company_status`, `industry`,
+`region_code`, `is_simplified_tax`, `dissolution_flag` могут быть `NULL` — API
+возвращает их как `null`.
 
 ## Запуск
 
@@ -144,6 +160,12 @@ cd backend
 | GET | `/api/loan-products` | `200` — список активных продуктов из `loan_catalog` (возможен пустой список) | `422` — невалидные параметры подбора, `503` — БД недоступна |
 | GET | `/api/financial-statements/{inn}` | `200` — все годовые отчёты компании (по убыванию года, может быть `[]`) | `422` — невалидный ИНН, `503` — БД недоступна |
 | GET | `/api/financial-statements/{inn}/latest` | `200` — последний по году отчёт компании | `404` — отчётности нет, `422` — невалидный ИНН, `503` — БД недоступна |
+| POST | `/api/loan-applications` | `201` — заявка с результатом скоринга и статусом | `404` — компания/продукт не найдены, `422` — невалидные данные, `503` — БД недоступна |
+| GET | `/api/loan-applications` | `200` — список заявок; по умолчанию `status=manual_review` (очередь сотрудника) | `422` — недопустимый статус, `503` — БД недоступна |
+| GET | `/api/loan-applications/{application_id}` | `200` — заявка, рейтинг, причина передачи, решение, история | `404` — заявка не найдена, `503` — БД недоступна |
+| POST | `/api/loan-applications/{application_id}/decision` | `200` — решение сотрудника по заявке из `manual_review` | `403` — не сотрудник, `404` — заявка не найдена, `409` — заявка уже решена автоматически, `422` — невалидные данные, `503` — БД недоступна |
+| POST | `/api/loan-applications/{application_id}/offers/{offer_id}/select` | `200` — выбранный оффер, заявка `approved` | `404` — заявка/оффер не найдены, `409` — заявка/оффер не ожидают выбора, `503` — БД недоступна |
+| POST | `/api/loan-applications/{application_id}/offers/{offer_id}/decline` | `200` — отказ от оффера; при отказе от всех — `rejected` | `404` — заявка/оффер не найдены, `409` — заявка/оффер не ожидают выбора, `503` — БД недоступна |
 
 Правила валидации ИНН: только цифры, длина 10 (ООО) или 12 (ИП). Невалидный
 ИНН возвращает `422` с понятным `detail`, например:
@@ -166,6 +188,32 @@ cd backend
 При недоступной БД `/health` продолжает отвечать `200`, а поиск компании и
 сохранение отчётности возвращают `503 {"detail":"База данных недоступна"}`;
 подробности пишутся в лог сервера, stack trace клиенту не отдаётся.
+
+## Скоринг и маршрутизация заявок
+
+- `POST /api/loan-applications` сохраняет заявку, вызывает **существующий**
+  алгоритм `src/credit_risk` (`Financial_Risk_Score` + `CreditScorer`) и
+  сохраняет рейтинг в `applications_checks`.
+- Автоматическое решение: продуктовый скоринг ниже нижней границы
+  `min_credit_rating/10` → `rejected`, выше верхней границы → `approved`.
+- Ручная проверка (`manual_review`), если скоринг в пограничной зоне продукта
+  (существующее правило `employee_rout`) или цель кредита `other`.
+- Если рейтинг ниже `min_credit_rating` выбранного продукта (или выбранный
+  продукт не прошёл существующий порог), backend ищет альтернативы среди
+  продуктов, которые были доступны клиенту изначально по сумме, сроку, цели,
+  категории и возрасту бизнеса. Подходящие альтернативы сохраняются в
+  `application_offers`, заявка получает `offer_pending`; если альтернатив нет —
+  финальный `rejected`. Автоматического одобрения/отказа по выбранному продукту
+  в этом случае нет.
+- Клиент выбирает оффер (`POST .../offers/{offer_id}/select`) или отказывается
+  (`POST .../offers/{offer_id}/decline`); при выборе заявка становится `approved`,
+  при отказе от всех офферов — `rejected`. Повторный скоринг не выполняется.
+- Причина передачи сохраняется в `applications_checks.routing_reason`,
+  решение — в `applications_decisions`, история — в `applications_history`.
+- Ошибка скоринга не приводит к ложному одобрению/отказу: заявка уходит в
+  `manual_review` с `has_error = TRUE`.
+- Формулы и веса не изменялись: используются файлы `src/credit_risk/*.py` и
+  `src/data/weight.json` как есть.
 
 ## Примеры curl
 
@@ -219,6 +267,25 @@ curl -i -X POST http://127.0.0.1:8000/api/financial-statements \
   -H 'Content-Type: application/json' \
   -d '{"inn":"9999999999","report_year":2025}' 
 
+# создать заявку: рейтинг и авто-решение
+curl -i -X POST http://127.0.0.1:8000/api/loan-applications \
+  -H 'Content-Type: application/json' \
+  -d '{"inn":"4217064416","product_id":2,"requested_amount":2000000,
+       "requested_term_months":12,"loan_purpose":"working_capital"}'
+
+# очередь ручной проверки и причина передачи
+curl -i 'http://127.0.0.1:8000/api/loan-applications?status=manual_review'
+curl -i http://127.0.0.1:8000/api/loan-applications/<application_id>
+
+# выбор альтернативного предложения / отказ
+curl -i -X POST http://127.0.0.1:8000/api/loan-applications/<application_id>/offers/<offer_id>/select
+curl -i -X POST http://127.0.0.1:8000/api/loan-applications/<application_id>/offers/<offer_id>/decline
+
+# решение сотрудника по заявке из manual_review
+curl -i -X POST http://127.0.0.1:8000/api/loan-applications/<application_id>/decision \
+  -H 'Content-Type: application/json' \
+  -d '{"decision":"approved","decided_by":"bank","reason":"Проверено сотрудником"}'
+
 # при остановленной БД
 curl -i http://127.0.0.1:8000/health
 # {"status":"ok","database":"unavailable"}
@@ -228,11 +295,14 @@ curl -i http://127.0.0.1:8000/api/companies/7701234567
 
 ## Ограничения и заметки
 
-- Реализованы `/health`, поиск компании по ИНН, подбор активных продуктов из
-  `loan_catalog` и сохранение годовой финансовой отчётности; заявки, скоринг,
-  офферы и решения пока не реализованы.
-- Аутентификации и авторизации нет — сервис рассчитан на локальную разработку
-  и демо.
+- Реализованы `/health`, компании, продукты, финансовая отчётность, авторизация,
+  заявки, скоринг и ручная проверка. `offer_pending`/офферы не используются
+  в текущем сценарии.
+- Для решения сотрудника проверяется, что `decided_by` — пользователь с
+  `profile_type='employee'` из `login`. Полноценных токенов/сессий в проекте
+  пока нет, поэтому API рассчитан на локальную разработку и демо.
+- Тесты: `cd backend && .venv/bin/python -m unittest discover -s tests -t .`
+  (без БД) и `RUN_DB_TESTS=1 ...` (с реальной PostgreSQL).
 - Пул соединений не используется: на каждый запрос открывается новое
   подключение psycopg с `connect_timeout=5`. Для хакатонного MVP этого
   достаточно.

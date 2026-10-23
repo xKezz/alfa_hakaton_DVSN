@@ -68,6 +68,7 @@ export default function CreditCalculator({ defaultCompany, health, onApply }) {
   const [lookup, setLookup] = useState({ state: "idle", company: null, error: null });
   const [fillStatus, setFillStatus] = useState({ state: "idle", message: "" });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const [reloadKey, setReloadKey] = useState(0);
   const [catalog, setCatalog] = useState({ key: null, products: [], error: null });
 
@@ -142,12 +143,17 @@ export default function CreditCalculator({ defaultCompany, health, onApply }) {
     setFillStatus({ state: "idle", message: "" });
 
     const profile = readStoredProfile();
-    const inn = String(profile.inn || defaultCompany?.inn || form.inn || "").trim();
+    // ИНН всегда берём у компании, к которой привязан текущий аккаунт.
+    // Старое значение ipProfile.inn может относиться к другой демо-компании.
+    const inn = String(defaultCompany?.inn || form.inn || "").trim();
     if (!inn) {
       setLookup({
         state: "error",
         company: null,
-        error: { message: "Профиль не заполнен: укажите ИНН вручную." },
+        error: {
+          message:
+            "Компания аккаунта ещё не загружена. Обновите страницу и повторите.",
+        },
       });
       return;
     }
@@ -269,22 +275,27 @@ export default function CreditCalculator({ defaultCompany, health, onApply }) {
     if (Object.keys(errors).length > 0) return;
     if (!selectedProduct) return;
 
+    setSubmitError("");
     setIsSubmitting(true);
-    await new Promise((resolve) => setTimeout(resolve, 400));
-
-    onApply({
-      product: selectedProduct,
-      amount,
-      termMonths: months,
-      purpose: form.purpose,
-      inn: String(form.inn).trim(),
-      company: lookup.company || defaultCompany,
-      revenue: Number(form.revenue),
-      profit: Number(form.profit),
-      obligations: Number(form.obligations),
-      revenueSource: lookup.state === "ok" ? "api" : "manual",
-    });
-    setIsSubmitting(false);
+    try {
+      await onApply({
+        product: selectedProduct,
+        amount,
+        termMonths: months,
+        purpose: form.purpose,
+        inn: String(form.inn).trim(),
+        company: lookup.company || defaultCompany,
+        revenue: Number(form.revenue),
+        profit: Number(form.profit),
+        obligations: Number(form.obligations),
+        businessAgeMonths: userAgeMonths,
+        revenueSource: lookup.state === "ok" ? "api" : "manual",
+      });
+    } catch (error) {
+      setSubmitError(error.message || "Не удалось отправить заявку");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -619,6 +630,12 @@ export default function CreditCalculator({ defaultCompany, health, onApply }) {
                             <div className="company-result-label">УСН</div>
                             <div className="company-result-value">{lookup.company.is_simplified_tax ? "Да" : "Нет"}</div>
                           </div>
+                        </div>
+                      )}
+
+                      {submitError && (
+                        <div className="notice notice-warn" style={{ marginTop: 14 }}>
+                          {submitError}
                         </div>
                       )}
 

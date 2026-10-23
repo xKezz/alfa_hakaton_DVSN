@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Button, EmptyState, Segmented, StatusBadge } from "../components/ui.jsx";
 import { STATUS_FILTERS, formatDate, formatMoney, formatMonths } from "../data/mock.js";
 
-const ACTIVE_STATUSES = ["submitted", "processing", "manual_review"];
+const ACTIVE_STATUSES = ["submitted", "processing", "manual_review", "offer_pending"];
 
 function matchesFilter(application, filter) {
   if (filter === "all") return true;

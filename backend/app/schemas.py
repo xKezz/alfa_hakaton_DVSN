@@ -3,9 +3,9 @@
 from __future__ import annotations
 
 import re
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -118,3 +118,162 @@ class AuthUser(BaseModel):
     username: str
     profile_type: Literal["business", "employee"]
     company_inn: str | None = None
+
+
+# ---------------------------------------------------------------------------
+# Кредитные заявки и скоринг
+# ---------------------------------------------------------------------------
+
+LOAN_APPLICATION_STATUSES = (
+    "submitted",
+    "processing",
+    "manual_review",
+    "offer_pending",
+    "approved",
+    "rejected",
+)
+
+LOAN_PURPOSES = (
+    "working_capital",
+    "equipment",
+    "business_expansion",
+    "refinancing",
+    "other",
+)
+
+
+class LoanApplicationCreate(BaseModel):
+    """Заявка клиента на кредитный продукт из `loan_catalog`."""
+
+    inn: str = Field(examples=["4217064416"], description="ИНН заявителя")
+    product_id: int = Field(gt=0, examples=[2])
+    requested_amount: Decimal = Field(gt=0, examples=[2000000])
+    requested_term_months: int = Field(gt=0, examples=[12])
+    loan_purpose: str = Field(
+        examples=["working_capital"],
+        description="Код цели кредита из loan_catalog.loan_purpose",
+    )
+    business_age_months: int | None = Field(
+        default=None,
+        ge=0,
+        description="Возраст бизнеса в месяцах на момент подбора (для альтернатив)",
+    )
+
+    @field_validator("inn")
+    @classmethod
+    def validate_inn(cls, value: str) -> str:
+        if not re.fullmatch(INN_PATTERN, value):
+            raise ValueError("ИНН должен состоять только из цифр и содержать 10 или 12 символов")
+        return value
+
+    @field_validator("loan_purpose")
+    @classmethod
+    def validate_purpose(cls, value: str) -> str:
+        if value not in LOAN_PURPOSES:
+            raise ValueError(
+                "Недопустимая цель кредита. Допустимые: " + ", ".join(LOAN_PURPOSES)
+            )
+        return value
+
+
+class LoanApplicationDecisionRequest(BaseModel):
+    """Решение сотрудника по заявке, ожидающей ручной проверки."""
+
+    decision: Literal["approved", "rejected"]
+    decided_by: str = Field(
+        min_length=1, max_length=100, examples=["bank"],
+        description="Логин сотрудника из таблицы login (profile_type='employee')",
+    )
+    reason: str | None = Field(default=None, max_length=2000)
+    approved_amount: Decimal | None = Field(default=None, gt=0)
+    approved_term_months: int | None = Field(default=None, gt=0)
+
+
+class ApplicationScoringInfo(BaseModel):
+    """Сохранённый результат скоринга заявки (applications_checks)."""
+
+    rating: int | None = None
+    risk_category: str | None = None
+    product_scoring: float | None = None
+    scoring_factors: dict[str, Any] | None = None
+    employee_rout: bool = False
+    routing_reason: str | None = None
+    has_error: bool = False
+    checked_at: datetime | None = None
+
+
+class ApplicationDecisionInfo(BaseModel):
+    """Решение по заявке (applications_decisions)."""
+
+    decision_type: str
+    decision_source: str
+    decided_by: str | None = None
+    decision_reason: str | None = None
+    approved_amount: float | None = None
+    approved_term_months: int | None = None
+    decided_at: datetime
+
+
+class ApplicationHistoryInfo(BaseModel):
+    """Событие истории заявки (applications_history)."""
+
+    event_type: str
+    actor_username: str | None = None
+    old_status: str | None = None
+    new_status: str | None = None
+    event_description: str | None = None
+    created_at: datetime
+
+
+class ApplicationOfferInfo(BaseModel):
+    """Альтернативное предложение по заявке (application_offers)."""
+
+    offer_id: int
+    product_id: int
+    product_name: str | None = None
+    percent: float | None = None
+    approved_amount: float
+    approved_term_months: int
+    status: str
+    created_at: datetime
+    decided_at: datetime | None = None
+
+
+class LoanApplicationDetail(BaseModel):
+    """Полная карточка заявки для клиента/сотрудника."""
+
+    application_id: str
+    inn: str
+    company_name: str | None = None
+    product_id: int
+    product_name: str | None = None
+    requested_amount: float
+    requested_term_months: int
+    loan_purpose: str | None = None
+    status: str
+    created_at: datetime
+    updated_at: datetime
+    scoring: ApplicationScoringInfo | None = None
+    decision: ApplicationDecisionInfo | None = None
+    offers: list[ApplicationOfferInfo] = Field(default_factory=list)
+    history: list[ApplicationHistoryInfo] = Field(default_factory=list)
+
+
+class LoanApplicationSummary(BaseModel):
+    """Краткая строка очереди заявок (в т.ч. на ручную проверку)."""
+
+    application_id: str
+    inn: str
+    company_name: str | None = None
+    product_id: int
+    product_name: str | None = None
+    requested_amount: float
+    requested_term_months: int
+    loan_purpose: str | None = None
+    status: str
+    rating: int | None = None
+    risk_category: str | None = None
+    employee_rout: bool = False
+    routing_reason: str | None = None
+    created_at: datetime
+    updated_at: datetime
