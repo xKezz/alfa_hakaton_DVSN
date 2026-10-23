@@ -1,51 +1,74 @@
-"""Подбор кредитного продукта и формирование заявки (loan_applications).
-
-Класс Credit_category:
-1. проверяет пользователя в ФНС (существует ли ИНН) и берёт его карточку;
-2. берёт кредитный score (0..1000) и возраст бизнеса из user_param/API;
-3. читает каталог продуктов из внутренней БД и фильтрует его по условиям:
-   тип бизнеса, возраст, минимальный рейтинг, сумма, срок, цель кредита;
-4. если выбранный пользователем продукт есть в подходящих — апрувит его,
-   иначе возвращает список всех подходящих предложений;
-5. создаёт запись в loan_applications.
-
-Все запросы к БД выполняются через API (apis_fns_example.py, internal_api.py),
-константы и справочники — в config.py.
-"""
-
 import asyncio
-import datetime
 import sys
+from typing import Dict, Any
 
-if __package__:  # запуск как пакета: python -m src.credit_risk.credit_category
+if __package__:
     from . import config
     from .apis_fns_example import FNSApi
     from .internal_api import InternalApi
-else:  # запуск из каталога src/credit_risk
+else:
     import config
     from apis_fns_example import FNSApi
     from internal_api import InternalApi
 
-try:  # корректная печать кириллицы в консоли Windows
+try:
     sys.stdout.reconfigure(encoding="utf-8")
     sys.stderr.reconfigure(encoding="utf-8")
-except (AttributeError, ValueError):  # например, при перехвате stdout в тестах
+except (AttributeError, ValueError):
     pass
 
-# Перевод значения в рейтинг (буквенная шкала -> баллы)
-rating_to_score = config.RATING_TO_SCORE
-
+RATING_TO_SCORE = config.RATING_TO_SCORE
 
 def rating_to_score_fast(rating: int) -> str:
-    """Быстрая конвертация баллы в рейтинг через словарь."""
-    return min(rating_to_score.keys(), key=lambda key: abs(rating_to_score[key] - int(rating)))
-
+    return min(RATING_TO_SCORE.keys(), key=lambda k: abs(RATING_TO_SCORE[k] - int(rating)))
 
 async def loan_catalog(sorted_param: list[str] | None = None) -> list[dict]:
-    """Получаем список всех доступных предложений, отсортированных по параметрам."""
     async with InternalApi() as api:
         return await api.get_loan_catalog(sorted_param)
+    
+async def get_mean_prod_params() -> Dict[str, float]:
+    data = await loan_catalog()
+    if not data:
+        raise ValueError("Каталог кредитных продуктов пуст")
+    
+    n = float(len(data))
+    
+    return {
+        "amount": float(sum(float(i.get("max_amount", 0)) for i in data) / n),
+        "term": float(sum((float(i.get("max_term_months", 0)) + float(i.get("min_term_months", 0))) / 2.0 for i in data) / n),
+        "age": float(sum(float(i.get("business_age", 0)) for i in data) / n),
+        "percent": float(sum(float(i.get("percent", 0)) for i in data) / n),
+        "fin_score": float(sum(float(i.get("min_credit_rating", 0)) for i in data) / n),
+    }
 
+class CreditScorer:
+    def __init__(self, prod_params: Dict[str, float]):
+        self.prod = prod_params
+
+    def _calc_avg_payment(self) -> float:
+        r = self.prod["percent"] / (12 * 100)
+        n = self.prod["term"]
+        if r == 0:
+            return self.prod["amount"] / n if n > 0 else 0.0
+        return self.prod["amount"] * (r * (1 + r)**n) / ((1 + r)**n - 1)
+
+    @staticmethod
+    def scaler(c_val: float, p_val: float, cap: float = 1.0, floor: float = 0.0) -> float:
+        """Нормализует показатель клиента относительно базового значения продукта."""
+        if p_val == 0:
+            return cap if c_val >= 0 else floor
+        return max(floor, min(cap, c_val / p_val))
+
+    def calculate_score(self, client: Dict[str, Any]) -> float:
+        """Вычисление итогового скорингового балла (0 - 100) через нормализацию scaler'ом."""
+        pmt = self._calc_avg_payment()
+        
+        s1 = self.scaler(client["credit_score"], self.prod["fin_score"])
+        s2 = self.scaler(client["net_profit"], pmt)
+        s3 = self.scaler(client["total_equity"], self.prod["amount"])
+        s4 = self.scaler(client["age"], self.prod["age"])
+
+        return round((0.4 * s1 + 0.2 * s2 + 0.25 * s3 + 0.15 * s4) * 100, 2)
 
 class Credit_category:
     """Подбор продуктов и оформление заявки на кредит."""
@@ -96,64 +119,11 @@ class Credit_category:
         и возраст бизнеса. Балл берётся из user_param['credit_score'], а если его
         нет — запрашивается у внутреннего API (пока заглушка).
         """
-        inn = self.user_param.get("inn")
-        if not inn:
-            raise ValueError("В user_param не указан ИНН (inn)")
-
-        company = await self.api.get_company_info(inn)
-        if company is None:
-            raise ValueError("Такого пользователя не существует")
-        self.company_info = company
-
-        credit_score = self.user_param.get("credit_score")
-        if credit_score is None:
-            report_year = self.user_param.get("report_year")
-            if report_year is None:
-                raise ValueError(
-                    "Не указан credit_score. Пока API расчёта рейтинга — заглушка, "
-                    "передайте балл (0..1000) в user_param['credit_score']"
-                )
-            rating = await self.internal_api.get_credit_rating(inn, int(report_year))
-            credit_score = rating["rating"]
-        self.credit_score = float(credit_score)
-        if not 0 <= self.credit_score <= 1000:
-            raise ValueError("credit_score должен быть в диапазоне 0..1000")
-
-        age = self.user_param.get("age")
-        if age is not None:
-            self.business_age = float(age)
-        else:
-            registered = self._as_date(company.get("registration_date"))
-            if registered is not None:
-                reference_year = self.user_param.get("report_year")
-                end_date = (
-                    datetime.date(int(reference_year), 12, 31)
-                    if reference_year is not None
-                    else datetime.date.today()
-                )
-                self.business_age = (end_date - registered).days / 365.25
-
-        return self.user_param
-
+        ...
+        
     def _search_params(self) -> dict:
         """Разбирает credit_search_param: сумма, срок, цель."""
-        search = self.user_param.get("credit_search_param") or {}
-        amount = search.get("amount")
-        term = search.get("term")
-        if amount is None or term is None:
-            raise ValueError("В credit_search_param нужны amount и term")
-        if float(amount) <= 0:
-            raise ValueError("amount должен быть больше 0")
-        if int(term) <= 0:
-            raise ValueError("term должен быть больше 0")
-
-        purpose = search.get("descript")
-        if purpose is not None and purpose not in config.LOAN_PURPOSES:
-            raise ValueError(
-                f"Недопустимая цель кредита: {purpose}. "
-                f"Допустимые: {', '.join(config.LOAN_PURPOSES)}"
-            )
-        return {"amount": float(amount), "term": int(term), "purpose": purpose}
+        ...
 
     # ----------------------------- подбор продуктов -----------------------------
 
@@ -162,36 +132,7 @@ class Credit_category:
         Проверяет обязательные условия и оставляет продукты, подходящие пользователю.
         Возвращает отсортированный список подходящих продуктов.
         """
-        if self.company_info is None or self.credit_score is None:
-            await self.read_user_data()
-        if not self.catalog_loans:
-            self.catalog_loans = await self.internal_api.get_loan_catalog()
-
-        search = self._search_params()
-        # company_status в БД: 'IP'/'OOO'; в каталоге: 'ip'/'ooo'/'both'
-        company_status = str(self.company_info.get("company_status") or "").lower()
-
-        matching: list[dict] = []
-        for product in self.catalog_loans:
-            if not product.get("is_active"):
-                continue
-            if str(product.get("business_category") or "").lower() not in (company_status, "both"):
-                continue
-            if self.business_age is not None and float(product.get("business_age") or 0) > self.business_age:
-                continue
-            if float(product.get("min_credit_ratings") or 0) > self.credit_score:
-                continue
-            if not (float(product.get("min_amount") or 0) <= search["amount"] <= float(product.get("max_amount") or 0)):
-                continue
-            if not (int(product.get("min_term_months") or 0) <= search["term"] <= int(product.get("max_term_months") or 0)):
-                continue
-            # loan_purpose = NULL у продукта означает «любая цель»
-            if search["purpose"] is not None and product.get("loan_purpose") not in (None, search["purpose"]):
-                continue
-            matching.append(dict(product))
-
-        self.matching_products = matching
-        return self.rank_loan_products()
+        ...
 
     def calculate_product_score(self, product: dict) -> float:
         """Оценка продукта для клиента: пока по ставке (меньше — лучше)."""
@@ -210,59 +151,24 @@ class Credit_category:
         Если выбранный продукт подошёл — статус 'approved' и продукт апрувится.
         Если нет — статус 'offer_pending', а в ответе список подходящих продуктов.
         """
-        matching = await self.check_product_requirements()
-        search = self._search_params()
-        catalog_ids = {int(product["product_id"]) for product in self.catalog_loans}
-        if self.product_id not in catalog_ids:
-            raise ValueError(f"Продукт {self.product_id} не найден в каталоге")
-        approved_product = next(
-            (product for product in matching if int(product.get("product_id")) == self.product_id),
-            None,
-        )
-        status = (
-            config.APPLICATION_STATUS_APPROVED
-            if approved_product is not None
-            else config.APPLICATION_STATUS_OFFER_PENDING
-        )
+        ...
 
-        self.application = await self.internal_api.create_loan_application(
-            inn=self.user_param["inn"],
-            product_id=self.product_id,
-            requested_amount=search["amount"],
-            requested_term_months=search["term"],
-            loan_purpose=search["purpose"],
-            application_status=status,
-        )
-
-        return {
-            "application_id": self.application["application_id"],
-            "status": status,
-            "user_type": self.company_info.get("company_status"),
-            "credit_score": self.credit_score,
-            "rating": rating_to_score_fast(int(round(self.credit_score))),
-            "requested_amount": search["amount"],
-            "requested_term_months": search["term"],
-            "loan_purpose": search["purpose"],
-            "approved_product": approved_product,
-            "offers": [] if approved_product is not None else matching,
-            "application": self.application,
+async def main():
+    try:
+        params = await get_mean_prod_params()
+        scorer = CreditScorer(params)
+        
+        client = {
+            "credit_score": 750,
+            "net_profit": 150000,
+            "total_equity": 5000000,
+            "age": 5
         }
-
-    @staticmethod
-    def _as_date(value) -> datetime.date | None:
-        if value is None:
-            return None
-        if isinstance(value, datetime.datetime):
-            return value.date()
-        if isinstance(value, datetime.date):
-            return value
-        if isinstance(value, str):
-            try:
-                return datetime.date.fromisoformat(value.strip()[:10])
-            except ValueError:
-                return None
-        return None
-
+        
+        score = scorer.calculate_score(client)
+        print(f"Итоговый скоринг: {score}")
+    except Exception as e:
+        print(f"Ошибка: {e}")
 
 if __name__ == "__main__":
-    print(asyncio.run(loan_catalog()))
+    asyncio.run(main())
