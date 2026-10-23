@@ -22,3 +22,10 @@ __pycache__/
 *.py[cod]
 *$py.class
 *.so
+.csv#
+.bkp
+.csv
+df_company2.csv
+df_company2_cleaned.csv
+/df_company2.csv
+/df_company2_cleaned.csv

@@ -1,0 +1,21 @@
+﻿# Виртуальное окружение
+.venv/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Локальные секреты (в репозиторий не попадают)
+.env
+.env.*
+!.env.example
+
+# Логи и кэши инструментов
+*.log
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+*.txt
+*.csv

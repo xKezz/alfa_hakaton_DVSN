@@ -1,0 +1,143 @@
+<mxfile host="Electron">
+  <diagram name="Страница-1" id="y_USUkgqJS-lc4V2zJXk">
+    <mxGraphModel dx="1371" dy="674" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="WDR9ud70uHhjlXm47aZa-14" parent="1" style="shape=tableRow;horizontal=0;startSize=0;swimlaneHead=0;swimlaneBody=0;fillColor=none;collapsible=0;dropTarget=0;points=[[0,0.5],[1,0.5]];portConstraint=eastwest;top=0;left=0;right=0;bottom=0;html=1;" value="" vertex="1">
+          <mxGeometry height="30" width="180" x="190" y="420" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-15" parent="WDR9ud70uHhjlXm47aZa-14" style="shape=partialRectangle;connectable=0;fillColor=none;top=0;left=0;bottom=0;right=0;editable=1;overflow=hidden;html=1;whiteSpace=wrap;" value="" vertex="1">
+          <mxGeometry height="30" width="60" as="geometry">
+            <mxRectangle height="30" width="60" as="alternateBounds" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-17" parent="1" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=33;whiteSpace=wrap;html=1;" value="companies" vertex="1">
+          <mxGeometry height="400" width="390" x="60" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-18" parent="WDR9ud70uHhjlXm47aZa-17" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;INN(str) (**PK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;company_name(str)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;registration_date(YYYY-MM-DD)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;company_status(category)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;industry(str, код отрасли)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;region_code(str)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;is_simplified_tax(binary, УСН)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;dissolution_flag(binary, ликвидация)&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="360" width="390" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-22" parent="1" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=33;whiteSpace=wrap;html=1;" value="financial_statements" vertex="1">
+          <mxGeometry height="570" width="470" x="590" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-23" parent="WDR9ud70uHhjlXm47aZa-22" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;financial_id (**PK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;INN (**FK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;report_year (int)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;revenue (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;net_profit (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;assets (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;current_assets (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;total_equity (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;longterm_debt (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;shortterm_debt (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;shortterm_liab (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;retained_earnings (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;profit_from_sales (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;before_tax (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;cash_equivalents (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;interest_payable (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;balance_operating (decimal)&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="530" width="470" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-26" edge="1" parent="1" source="WDR9ud70uHhjlXm47aZa-18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.25;entryDx=0;entryDy=0;exitX=0.997;exitY=0.058;exitDx=0;exitDy=0;exitPerimeter=0;" target="WDR9ud70uHhjlXm47aZa-22">
+          <mxGeometry relative="1" x="-0.0014" as="geometry">
+            <Array as="points">
+              <mxPoint x="448.8" y="280" />
+              <mxPoint x="520" y="280" />
+              <mxPoint x="520" y="312.5" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-27" parent="1" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=33;whiteSpace=wrap;html=1;" value="loan_catalog" vertex="1">
+          <mxGeometry height="380" width="420" x="50" y="650" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-28" parent="WDR9ud70uHhjlXm47aZa-27" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="&lt;div style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 17px;&quot;&gt;product_id (**PK**)&lt;/font&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 17px;&quot;&gt;&lt;br&gt;&lt;/font&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 17px;&quot;&gt;product_name (str)&lt;/font&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 17px;&quot;&gt;description (str) ( описание продукта)&lt;/font&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 17px;&quot;&gt;business_category (category) (категория бизнеса: ИП или ООО)&lt;/font&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 17px;&quot;&gt;min_amount (int)&lt;/font&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 17px;&quot;&gt;max_amount (int)&lt;/font&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 17px;&quot;&gt;min_term_months (минимальный срок в месяцах)&lt;/font&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 17px;&quot;&gt;max_term_months (максимальный срок в месяцах)&lt;/font&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 17px;&quot;&gt;pecent (decimal) (проц ставка годовых)&lt;/font&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 17px;&quot;&gt;loan_purpose (category) (цель кредитования)&lt;/font&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;font face=&quot;Helvetica&quot; style=&quot;font-size: 17px;&quot;&gt;is_active (binary) (доступен ли продукт)&lt;/font&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 17px;&quot;&gt;business_age (int) (возраст в месяцах)&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="350" width="420" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-29" parent="1" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=33;whiteSpace=wrap;html=1;" value="loan_applications" vertex="1">
+          <mxGeometry height="340" width="490" x="590" y="650" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-30" parent="WDR9ud70uHhjlXm47aZa-29" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="&lt;div style=&quot;&quot;&gt;&lt;div&gt;&lt;span style=&quot;font-size: 19px;&quot;&gt;application_id (**PK)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 19px;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 19px;&quot;&gt;INN (**FK**)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 19px;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 19px;&quot;&gt;product_id (**FK**)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 19px;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 19px;&quot;&gt;requested_amount (decimal) (запрашиваемая сумма)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 19px;&quot;&gt;requested_term_months (int) (запрашиваемый срок кредита)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 19px;&quot;&gt;loan_purpose (category) (выбранная цель кредитования)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 19px;&quot;&gt;application_status(category) (текущий статус заявки)&lt;/span&gt;&lt;/div&gt;&lt;div&gt;&lt;span style=&quot;font-size: 19px;&quot;&gt;cteated_at (datetime) (дата и время подачи)&lt;/span&gt;&lt;/div&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 17px;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 17px;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 17px;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;br&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="310" width="490" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-31" edge="1" parent="1" source="WDR9ud70uHhjlXm47aZa-18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" target="WDR9ud70uHhjlXm47aZa-29">
+          <mxGeometry relative="1" x="0.2202" as="geometry">
+            <Array as="points">
+              <mxPoint x="520" y="280" />
+              <mxPoint x="520" y="735" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-32" edge="1" parent="1" source="WDR9ud70uHhjlXm47aZa-28" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=-0.006;entryY=0.3;entryDx=0;entryDy=0;entryPerimeter=0;" target="WDR9ud70uHhjlXm47aZa-30">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="500" y="700" />
+              <mxPoint x="500" y="773" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-33" parent="1" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=33;whiteSpace=wrap;html=1;" value="applications_checks" vertex="1">
+          <mxGeometry height="370" width="490" x="1164" y="645" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-34" parent="WDR9ud70uHhjlXm47aZa-33" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;check_id (**PK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;application_id (**FK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;product_id (**FK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;has_error (binary)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;risk_category (category)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;scoring (int)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;scoring_factors (json)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;employee_rout (binary)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;routing_reason (str)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;checked_at (datetime)&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="340" width="490" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-35" edge="1" parent="1" source="WDR9ud70uHhjlXm47aZa-30" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=-0.006;entryY=0.215;entryDx=0;entryDy=0;entryPerimeter=0;" target="WDR9ud70uHhjlXm47aZa-34">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1120" y="690" />
+              <mxPoint x="1120" y="741.7" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-36" edge="1" parent="1" source="WDR9ud70uHhjlXm47aZa-28" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=-0.008;entryY=0.363;entryDx=0;entryDy=0;entryPerimeter=0;" target="WDR9ud70uHhjlXm47aZa-34">
+          <mxGeometry relative="1" x="0.1025" as="geometry">
+            <Array as="points">
+              <mxPoint x="500" y="700" />
+              <mxPoint x="500" y="1030" />
+              <mxPoint x="1130" y="1030" />
+              <mxPoint x="1130" y="787.5" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-37" parent="1" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=33;whiteSpace=wrap;html=1;" value="applications_decisions" vertex="1">
+          <mxGeometry height="400" width="490" x="1770" y="645" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-38" parent="WDR9ud70uHhjlXm47aZa-37" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;decision_id (**PK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;application_id (**FK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;product_id (**FK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;offer_id (**FK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;decision_type (category)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;decision_source (category)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;decided_by (**FK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;decision_reason (str)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;approved_amount (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;approved_term_months (int)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;decided_at (datetime)&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="370" width="490" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-39" edge="1" parent="1" source="WDR9ud70uHhjlXm47aZa-30" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=-0.003;entryY=0.227;entryDx=0;entryDy=0;entryPerimeter=0;" target="WDR9ud70uHhjlXm47aZa-38">
+          <mxGeometry relative="1" x="-0.0464" as="geometry">
+            <Array as="points">
+              <mxPoint x="1120" y="690" />
+              <mxPoint x="1120" y="610" />
+              <mxPoint x="1720" y="610" />
+              <mxPoint x="1720" y="745.4" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-40" parent="1" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=35;whiteSpace=wrap;html=1;" value="login" vertex="1">
+          <mxGeometry height="330" width="390" x="1264" y="230" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-41" parent="WDR9ud70uHhjlXm47aZa-40" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;username (**PK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;password (str)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;profile_type (category)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;company_inn (**FK**)&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="300" width="390" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-42" parent="1" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=33;whiteSpace=wrap;html=1;" value="applications_history" vertex="1">
+          <mxGeometry height="300" width="490" x="1160" y="1130" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-43" parent="WDR9ud70uHhjlXm47aZa-42" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;history_id (**PK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;application_id (**FK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;event_type (category)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;actor_username (**FK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;old_status (category)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;new_status (category)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;event_description (str)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;created_at (datetime)&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="270" width="490" y="30" as="geometry" />
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-44" edge="1" parent="1" source="WDR9ud70uHhjlXm47aZa-30" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.25;entryDx=0;entryDy=0;" target="WDR9ud70uHhjlXm47aZa-43">
+          <mxGeometry relative="1" x="0.2393" as="geometry">
+            <Array as="points">
+              <mxPoint x="1100" y="690" />
+              <mxPoint x="1100" y="1220" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="WDR9ud70uHhjlXm47aZa-45" edge="1" parent="1" source="WDR9ud70uHhjlXm47aZa-28" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=-0.008;entryY=0.138;entryDx=0;entryDy=0;entryPerimeter=0;exitX=1.007;exitY=0.062;exitDx=0;exitDy=0;exitPerimeter=0;" target="WDR9ud70uHhjlXm47aZa-38">
+          <mxGeometry relative="1" x="-0.3004" as="geometry">
+            <Array as="points">
+              <mxPoint x="500" y="698.6" />
+              <mxPoint x="500" y="590" />
+              <mxPoint x="1740" y="590" />
+              <mxPoint x="1740" y="717.8" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="application_offers" value="application_offers" style="swimlane;childLayout=stackLayout;horizontal=1;startSize=30;horizontalStack=0;rounded=1;fontSize=14;fontStyle=0;strokeWidth=2;resizeParent=0;resizeLast=1;shadow=0;dashed=0;align=center;arcSize=33;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry height="430" width="470" x="585" y="1130" as="geometry" />
+        </mxCell>
+        <mxCell id="application_offers_fields" parent="application_offers" style="align=left;strokeColor=none;fillColor=none;spacingLeft=4;spacingRight=4;fontSize=12;verticalAlign=top;rotatable=0;part=1;html=1;whiteSpace=wrap;" value="&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;offer_id (**PK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;application_id (**FK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;product_id (**FK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;approved_amount (decimal)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;approved_term_months (int)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;offer_source (category)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;created_by (**FK**)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;offer_status (category)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;created_at (datetime)&lt;/span&gt;&lt;/div&gt;&lt;div style=&quot;&quot;&gt;&lt;span style=&quot;font-size: 18px;&quot;&gt;decided_at (datetime)&lt;/span&gt;&lt;/div&gt;" vertex="1">
+          <mxGeometry height="400" width="470" y="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
