@@ -1,3 +1,11 @@
+"""Финансовый скоринг компании (fin_score) по методике Credit Risk.md.
+
+Класс Financial_Risk_Score (бывш. Credit_Risk_Score) считает финансовые
+возможности компании и возвращает fin_params: fin_score, net_profit,
+total_equity, age. Эти значения использует credit_category.py при скоринге
+компании относительно конкретного кредитного продукта (CreditScorer).
+"""
+
 import datetime
 import json
 import math
@@ -18,7 +26,7 @@ def read_weights(path: str | Path = config.WEIGHTS_PATH) -> dict:
         return json.load(file)
 
 
-class Credit_Risk_Score:
+class Financial_Risk_Score:
     AGE_THRESHOLDS = config.AGE_THRESHOLDS  # возраст, лет
     PROFIT_FROM_SALES_MARGIN = config.PROFIT_FROM_SALES_MARGIN  # 2200 / 2110
     BEFORE_TAX_MARGIN = config.BEFORE_TAX_MARGIN  # 2300 / 2110
@@ -54,7 +62,7 @@ class Credit_Risk_Score:
 
     # ----------------------------- подключение -----------------------------
 
-    async def __aenter__(self) -> "Credit_Risk_Score":
+    async def __aenter__(self) -> "Financial_Risk_Score":
         await self.api.get_connection()
         return self
 
@@ -71,21 +79,32 @@ class Credit_Risk_Score:
         company = await self.api.get_company_info(inn)
         return None if company is None else company.get("company_status")
 
-    async def read_from_inn(self, inn: str, year: int) -> dict:
+    async def _resolve_year(self, inn: str, year: int | None, financial: dict | None = None) -> int:
+        """Отчётный год: переданный явно, последний доступный по ИНН или текущий (ручной ввод)."""
+        if year is not None:
+            return int(year)
+        latest = await self.internal_api.get_latest_report_year(inn)
+        if latest is not None:
+            return int(latest)
+        if financial is not None:
+            return datetime.date.today().year
+        raise ValueError(f"Нет финансовой отчётности ИНН {inn}")
+
+    async def read_from_inn(self, inn: str, year: int | None = None) -> dict:
         company = await self.api.get_company_info(inn)
         if company is None:
             raise ValueError(f"ИНН {inn} не найден в базе ФНС")
 
         self.inn = str(inn)
-        self.year = int(year)
+        self.year = await self._resolve_year(inn, year)
         self.company = company
         if company.get("company_status") == "IP":
             self.financial = {}
             return dict(company)
 
-        financial = await self.api.get_financial_info(inn, int(year))
+        financial = await self.api.get_financial_info(inn, self.year)
         if financial is None:
-            raise ValueError(f"Нет финансовой отчётности ИНН {inn} за {year} год")
+            raise ValueError(f"Нет финансовой отчётности ИНН {inn} за {self.year} год")
         self.financial = financial
         return {**company, **financial}
 
@@ -95,12 +114,12 @@ class Credit_Risk_Score:
 
     # ----------------------------- основной расчёт -----------------------------
 
-    async def calculate(self, inn: str, year: int, financial: dict | None = None) -> dict:
+    async def calculate(self, inn: str, year: int | None = None, financial: dict | None = None) -> dict:
         """
-        Полный расчёт: проверяем пользователя в API, берём данные, считаем рейтинг.
+        Полный расчёт: проверяем пользователя в API, берём данные, считаем fin_score.
 
         :param inn: ИНН
-        :param year: отчётный год
+        :param year: отчётный год (None — последний доступный по ИНН)
         :param financial: финансовые показатели вручную (обязательно для ИП)
         """
         company = await self.api.get_company_info(inn)
@@ -108,7 +127,7 @@ class Credit_Risk_Score:
             raise ValueError(f"ИНН {inn} не найден в базе ФНС")
 
         self.inn = str(inn)
-        self.year = int(year)
+        self.year = await self._resolve_year(inn, year, financial=financial)
         self.company = company
 
         if financial is not None:
@@ -119,15 +138,15 @@ class Credit_Risk_Score:
                 "в calculate(..., financial={...}) или используйте calculate_manual()"
             )
         else:
-            statements = await self.api.get_financial_info(inn, int(year))
+            statements = await self.api.get_financial_info(inn, self.year)
             if statements is None:
-                raise ValueError(f"Нет финансовой отчётности ИНН {inn} за {year} год")
+                raise ValueError(f"Нет финансовой отчётности ИНН {inn} за {self.year} год")
             self.financial = statements
 
-        self.percentiles = await self.internal_api.get_scoring_percentiles(inn, int(year))
+        self.percentiles = await self.internal_api.get_scoring_percentiles(inn, self.year)
         return self.score()
 
-    async def calculate_manual(self, inn: str, year: int, financial: dict) -> dict:
+    async def calculate_manual(self, inn: str, year: int | None = None, financial: dict | None = None) -> dict:
         return await self.calculate(inn, year, financial=financial)
 
     def score(self) -> dict:
@@ -165,6 +184,7 @@ class Credit_Risk_Score:
             weights_used = {}
             data_quality = "insufficient"
 
+        rating = int(math.floor(1000.0 * s_total + 0.5)) if s_total is not None else None
         return {
             "inn": self.inn,
             "report_year": self.year,
@@ -175,7 +195,16 @@ class Credit_Risk_Score:
             "blocks": blocks,
             "weights_used": weights_used,
             "s_total": s_total,
-            "rating": int(math.floor(1000.0 * s_total + 0.5)) if s_total is not None else None,
+            "rating": rating,
+            # Финансовый показатель компании (0..1000) — для credit_category.py.
+            "fin_score": rating,
+            # Финансовые параметры компании для CreditScorer (credit_category.py).
+            "fin_params": {
+                "fin_score": rating,
+                "net_profit": self._num(self.financial.get("net_profit")),
+                "total_equity": self._num(self.financial.get("total_equity")),
+                "age": self._age(),
+            },
             "data_quality": data_quality,
             "missing_blocks": missing_blocks,
         }
@@ -436,7 +465,7 @@ class Credit_Risk_Score:
     def _scale(value: float | None, bounds: tuple[float, float] | None) -> float | None:
         if value is None or bounds is None:
             return None
-        return Credit_Risk_Score.f(value, bounds[0], bounds[1])
+        return Financial_Risk_Score.f(value, bounds[0], bounds[1])
 
     @staticmethod
     def _combine(parts) -> tuple[float | None, str | None]:
@@ -494,7 +523,7 @@ class Credit_Risk_Score:
         """Сумма; если хотя бы одно слагаемое неизвестно (NULL) — результат неизвестен."""
         total = 0.0
         for value in values:
-            number = Credit_Risk_Score._num(value)
+            number = Financial_Risk_Score._num(value)
             if number is None:
                 return None
             total += number

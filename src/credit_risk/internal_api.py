@@ -211,6 +211,14 @@ class InternalApi:
 
     # ----------------------------- каталог продуктов -----------------------------
 
+    async def get_latest_report_year(self, inn: str) -> int | None:
+        """Последний доступный отчётный год компании (для авто-расчёта показателей)."""
+        conn = await self.get_connection()
+        return await conn.fetchval(
+            "SELECT max(report_year) FROM financial_statements WHERE inn = $1",
+            str(inn),
+        )
+
     async def get_loan_catalog(self, sorted_param: list[str] | None = None) -> list[dict]:
         """
         Возвращает список всех активных кредитных предложений.
@@ -294,19 +302,3 @@ class InternalApi:
             application_status,
         )
         return dict(row)
-
-    # ----------------------------- заглушки -----------------------------
-
-    async def get_credit_rating(self, inn: str, report_year: int, financial: dict | None = None) -> dict:
-        """
-        ЗАГЛУШКА: расчёт кредитного рейтинга клиента.
-        Позже будет вызывать Credit_Risk_Score.calculate().
-        """
-        raise NotImplementedError("InternalApi.get_credit_rating пока не реализован (заглушка)")
-
-    async def get_loan_offers(self, user_param: dict) -> list[dict]:
-        """
-        ЗАГЛУШКА: подбор кредитных предложений для клиента.
-        Позже будет вызывать Credit_category.
-        """
-        raise NotImplementedError("InternalApi.get_loan_offers пока не реализован (заглушка)")
