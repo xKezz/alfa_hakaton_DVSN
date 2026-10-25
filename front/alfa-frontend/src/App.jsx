@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import "./App.css";
 import {
   checkHealth,
+  createEmployeeOffer,
   createLoanApplication,
   decideLoanApplication,
   declineLoanOffer,
@@ -19,7 +20,7 @@ import EntrepreneurDashboard from "./pages/EntrepreneurDashboard.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 
-const SESSION_KEY = "alfaSessionAuthV2";
+const SESSION_KEY = "alfaSessionAuthV3";
 
 const EVENT_TITLES = {
   application_submitted: "Заявка подана",
@@ -38,7 +39,8 @@ function loadSession() {
     const raw = sessionStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const session = JSON.parse(raw);
-    // Старые демо-сессии без company_inn не должны подставлять чужой ИНН.
+    // Старые демо-сессии без company_inn/токена не должны подставлять чужой ИНН.
+    if (!session?.token) return null;
     if (session?.role === "business" && !session.companyInn) return null;
     return session;
   } catch {
@@ -88,11 +90,17 @@ function mapOffer(offer) {
     id: offer.offer_id,
     offerId: offer.offer_id,
     productId: offer.product_id,
-    title: offer.product_name || "Альтернативный продукт",
+    title: offer.product_name || "Кредитное предложение",
     rate: offer.percent,
     amount: Number(offer.approved_amount),
     termMonths: offer.approved_term_months,
     status: offer.status,
+    source: offer.source || "automatic",
+    createdBy: offer.created_by || null,
+    reason: offer.reason || null,
+    createdAt: offer.created_at,
+    decidedAt: offer.decided_at || null,
+    isEmployeeOffer: offer.source === "bank_employee",
   };
 }
 
@@ -118,7 +126,9 @@ function mapDetail(detail) {
       employee_rout: scoring.employee_rout,
     }),
     updatedAt: detail.updated_at,
+    createdAt: detail.created_at,
     productId: detail.product_id,
+    loanPurpose: detail.loan_purpose,
     scoring,
     offers,
     decision,
@@ -206,7 +216,7 @@ export default function App() {
 
     if (session.role === "business") {
       if (!companyInn) return undefined;
-      getLoanApplications({ inn: companyInn }).then((result) => {
+      getLoanApplications({ inn: companyInn, token: session.token }).then((result) => {
         if (!active) return;
         if (result.ok) {
           setApplications(result.applications.map(mapSummary));
@@ -216,7 +226,7 @@ export default function App() {
         setIsApplicationsLoading(false);
       });
     } else {
-      getLoanApplications({ status: "manual_review" }).then((result) => {
+      getLoanApplications({ status: "manual_review", token: session.token }).then((result) => {
         if (!active) return;
         if (result.ok) {
           setQueue(
@@ -237,8 +247,8 @@ export default function App() {
     };
   }, [session, companyInn, view]);
 
-  function handleLogin({ login, role, companyInn: loginCompanyInn }) {
-    setSession({ login, role, companyInn: loginCompanyInn });
+  function handleLogin({ login, role, companyInn: loginCompanyInn, token }) {
+    setSession({ login, role, companyInn: loginCompanyInn, token });
     setView(role === "employee" ? "bank" : "applications");
     setSelectedApplication(null);
   }
@@ -256,7 +266,7 @@ export default function App() {
   async function handleOpenApplication(id) {
     setView("application");
     setIsApplicationLoading(true);
-    const result = await getLoanApplication(id);
+    const result = await getLoanApplication(id, session?.token);
     setIsApplicationLoading(false);
     if (!result.ok) {
       setSelectedApplication(null);
@@ -282,7 +292,7 @@ export default function App() {
       requested_term_months: draft.termMonths,
       loan_purpose: chosenPurpose,
       business_age_months: draft.businessAgeMonths,
-    });
+    }, session?.token);
     if (!result.ok) {
       showToast("Заявка не отправлена", result.message);
       throw new Error(result.message);
@@ -297,7 +307,7 @@ export default function App() {
   }
 
   async function handleSelectOffer(applicationId, offerId) {
-    const result = await selectLoanOffer(applicationId, offerId);
+    const result = await selectLoanOffer(applicationId, offerId, session?.token);
     if (!result.ok) {
       showToast("Не удалось выбрать предложение", result.message);
       throw new Error(result.message);
@@ -312,7 +322,7 @@ export default function App() {
   }
 
   async function handleDeclineOffer(applicationId, offerId) {
-    const result = await declineLoanOffer(applicationId, offerId);
+    const result = await declineLoanOffer(applicationId, offerId, session?.token);
     if (!result.ok) {
       showToast("Не удалось отклонить предложение", result.message);
       throw new Error(result.message);
@@ -331,23 +341,64 @@ export default function App() {
     return mapped;
   }
 
-  async function handleDecision(queueId, decision, reason) {
-    const result = await decideLoanApplication(queueId, {
-      decision: decision === "approve" ? "approved" : "rejected",
-      decided_by: session?.login,
-      reason,
-    });
+  async function handleDecision(queueId, action, payload = {}) {
+    let result;
+    if (action === "offer") {
+      result = await createEmployeeOffer(
+        queueId,
+        {
+          product_id: payload.product_id,
+          approved_amount: payload.approved_amount,
+          approved_term_months: payload.approved_term_months,
+          reason: payload.reason,
+        },
+        session?.token
+      );
+    } else {
+      result = await decideLoanApplication(
+        queueId,
+        {
+          decision: action === "approve" ? "approved" : "rejected",
+          reason: payload.reason,
+          approved_amount: action === "approve" ? payload.approved_amount : null,
+          approved_term_months: action === "approve" ? payload.approved_term_months : null,
+        },
+        session?.token
+      );
+    }
     if (!result.ok) {
-      showToast("Решение не сохранено", result.message);
+      showToast("Действие не сохранено", result.message);
       throw new Error(result.message);
     }
     const mapped = mapDetail(result.application);
-    setQueue((previous) => previous.filter((item) => item.id !== queueId));
     if (selectedApplication?.id === queueId) setSelectedApplication(mapped);
-    showToast(
-      "Решение зафиксировано",
-      `Заявка ${queueId}: ${mapped.status}. Изменения сохранены в БД.`
-    );
+
+    if (action === "offer") {
+      // Предложение сформировано, но заявка ждёт решения предпринимателя.
+      // Оставляем карточку в очереди до следующего обновления, чтобы сотрудник
+      // увидел сохранённый результат.
+      setQueue((previous) =>
+        previous.map((item) =>
+          item.id === queueId
+            ? {
+                ...item,
+                status: mapped.status,
+                reason: "Сформировано предложение, ожидается решение предпринимателя",
+              }
+            : item
+        )
+      );
+      showToast(
+        "Предложение сформировано",
+        `Заявка ${queueId}: ожидается решение предпринимателя.`
+      );
+    } else {
+      setQueue((previous) => previous.filter((item) => item.id !== queueId));
+      showToast(
+        "Решение зафиксировано",
+        `Заявка ${queueId}: ${mapped.status}. Изменения сохранены в БД.`
+      );
+    }
     return mapped;
   }
 
@@ -440,7 +491,13 @@ export default function App() {
           </div>
         )}
 
-        {contentView === "bank" && <BankWorkspace queue={queue} onDecision={handleDecision} />}
+        {contentView === "bank" && (
+          <BankWorkspace
+            queue={queue}
+            token={session?.token}
+            onDecision={handleDecision}
+          />
+        )}
 
         {contentView === "applications" && (
           <EntrepreneurDashboard

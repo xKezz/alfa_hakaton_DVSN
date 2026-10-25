@@ -118,6 +118,7 @@ class AuthUser(BaseModel):
     username: str
     profile_type: Literal["business", "employee"]
     company_inn: str | None = None
+    access_token: str | None = Field(default=None, description="Bearer-токен для защищённых действий")
 
 
 # ---------------------------------------------------------------------------
@@ -184,13 +185,23 @@ class LoanApplicationDecisionRequest(BaseModel):
     """Решение сотрудника по заявке, ожидающей ручной проверки."""
 
     decision: Literal["approved", "rejected"]
-    decided_by: str = Field(
-        min_length=1, max_length=100, examples=["bank"],
-        description="Логин сотрудника из таблицы login (profile_type='employee')",
+    decided_by: str | None = Field(
+        default=None,
+        max_length=100,
+        description="Устаревшее поле; сервер использует логин из Bearer-токена",
     )
-    reason: str | None = Field(default=None, max_length=2000)
+    reason: str = Field(min_length=5, max_length=2000)
     approved_amount: Decimal | None = Field(default=None, gt=0)
     approved_term_months: int | None = Field(default=None, gt=0)
+
+
+class EmployeeOfferCreate(BaseModel):
+    """Индивидуальное предложение сотрудника банка."""
+
+    product_id: int = Field(gt=0)
+    approved_amount: Decimal = Field(gt=0)
+    approved_term_months: int = Field(gt=0)
+    reason: str = Field(min_length=5, max_length=2000)
 
 
 class ApplicationScoringInfo(BaseModel):
@@ -230,7 +241,7 @@ class ApplicationHistoryInfo(BaseModel):
 
 
 class ApplicationOfferInfo(BaseModel):
-    """Альтернативное предложение по заявке (application_offers)."""
+    """Предложение по заявке (application_offers)."""
 
     offer_id: int
     product_id: int
@@ -239,6 +250,9 @@ class ApplicationOfferInfo(BaseModel):
     approved_amount: float
     approved_term_months: int
     status: str
+    source: str = "automatic"
+    created_by: str | None = None
+    reason: str | None = None
     created_at: datetime
     decided_at: datetime | None = None
 

@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     # CORS: список origins через запятую
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
+    # Секрет для подписи токенов авторизации (для production задать AUTH_SECRET)
+    auth_secret: str = "alfa-hakaton-dev-secret-change-me"
+
     # PostgreSQL: вариант 1 — единая строка подключения
     database_url: str | None = None
 

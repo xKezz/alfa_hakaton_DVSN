@@ -12,6 +12,7 @@ import {
   getFinancialStatements,
   getLatestFinancialStatement,
   getLoanApplication,
+  getLoanProductCatalog,
 } from "../api.js";
 import { formatDate, formatDateTime, formatMoney, formatMonths } from "../data/mock.js";
 
@@ -26,6 +27,7 @@ const TABS = [
 const DECISION_OPTIONS = [
   { id: "approve", label: "Одобрить" },
   { id: "reject", label: "Отказать" },
+  { id: "offer", label: "Сформировать предложение" },
 ];
 
 const EVENT_TITLES = {
@@ -125,6 +127,8 @@ function mapBankDetail(detail, latestStatement, statementRows) {
     date: detail.created_at,
     amount: Number(detail.requested_amount),
     termMonths: detail.requested_term_months,
+    productId: detail.product_id,
+    loanPurpose: detail.loan_purpose,
     reason: scoring.routing_reason || "Передана сотруднику",
     status: detail.status,
     companyInn: detail.inn,
@@ -168,7 +172,14 @@ function fallbackBankApplication(summary) {
   };
 }
 
-function BankApplicationPanel({ application, company, companyError, isCompanyLoading, onDecision }) {
+function BankApplicationPanel({
+  application,
+  company,
+  companyError,
+  isCompanyLoading,
+  onDecision,
+  token,
+}) {
   const [activeTab, setActiveTab] = useState("company");
   const [decision, setDecision] = useState("");
   const [reason, setReason] = useState("");
@@ -176,22 +187,79 @@ function BankApplicationPanel({ application, company, companyError, isCompanyLoa
   const [formError, setFormError] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [approvedAmount, setApprovedAmount] = useState("");
+  const [approvedTerm, setApprovedTerm] = useState("");
+  const [offerProductId, setOfferProductId] = useState("");
+  const [offerProducts, setOfferProducts] = useState([]);
+  const [isProductsLoading, setIsProductsLoading] = useState(false);
+  const [productsError, setProductsError] = useState("");
+
+  async function handleDecisionChange(value) {
+    setDecision(value);
+    setFormError("");
+    setSuccess("");
+    if (value === "approve") {
+      setApprovedAmount(String(application.amount));
+      setApprovedTerm(String(application.termMonths));
+    }
+    if (value === "offer") {
+      setApprovedAmount(String(application.amount));
+      setApprovedTerm(String(application.termMonths));
+      setOfferProductId(String(application.productId || ""));
+      setProductsError("");
+      setIsProductsLoading(true);
+      const result = await getLoanProductCatalog(token);
+      setIsProductsLoading(false);
+      if (result.ok) {
+        setOfferProducts(result.products);
+        setOfferProductId(String(application.productId || result.products[0]?.product_id || ""));
+      } else {
+        setProductsError(result.message || "Не удалось загрузить продукты");
+      }
+    }
+  }
+
+  function validateForm() {
+    if (reason.trim().length < 5) return "Укажите обоснование (минимум 5 символов)";
+    if (decision === "approve" || decision === "offer") {
+      const amount = Number(approvedAmount);
+      const term = Number(approvedTerm);
+      if (!Number.isFinite(amount) || amount <= 0) return "Укажите положительную сумму";
+      if (!Number.isInteger(term) || term <= 0) return "Укажите положительный срок в месяцах";
+    }
+    if (decision === "offer" && !offerProductId) return "Выберите кредитный продукт";
+    return "";
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     if (!decision) {
-      setFormError("Выберите решение по заявке");
+      setFormError("Выберите действие по заявке");
       return;
     }
-    if (reason.trim().length < 5) {
-      setFormError("Укажите обоснование решения (минимум 5 символов)");
+    const validationError = validateForm();
+    if (validationError) {
+      setFormError(validationError);
       return;
     }
     setFormError("");
     setIsSubmitting(true);
     const label = DECISION_OPTIONS.find((option) => option.id === decision)?.label;
+    const payload = {
+      reason: reason.trim(),
+      approved_amount: Number(approvedAmount),
+      approved_term_months: Number(approvedTerm),
+    };
+    if (decision === "offer") {
+      payload.product_id = Number(offerProductId);
+    }
     try {
-      await onDecision(application.id, decision, reason.trim());
-      setSuccess(`Решение «${label}» зафиксировано. Заявка обновлена в БД.`);
+      await onDecision(application.id, decision, payload);
+      if (decision === "offer") {
+        setSuccess("Предложение сформировано. Заявка ожидает решения предпринимателя.");
+      } else {
+        setSuccess(`Действие «${label}» сохранено. Заявка обновлена в БД.`);
+      }
     } catch (error) {
       setFormError(error.message || "Не удалось сохранить решение");
     } finally {
@@ -386,25 +454,92 @@ function BankApplicationPanel({ application, company, companyError, isCompanyLoa
                     name={`decision-${application.id}`}
                     value={option.id}
                     checked={decision === option.id}
-                    onChange={(event) => {
-                      setDecision(event.target.value);
-                      setFormError("");
-                    }}
+                    onChange={(event) => handleDecisionChange(event.target.value)}
                   />
                   {option.label}
                 </label>
               ))}
             </div>
+            {(decision === "approve" || decision === "offer") && (
+              <div className="form-grid">
+                <Field label="Одобряемая сумма, ₽" htmlFor={`approved-amount-${application.id}`}>
+                  <input
+                    id={`approved-amount-${application.id}`}
+                    className="input"
+                    type="number"
+                    min="1"
+                    step="any"
+                    value={approvedAmount}
+                    onChange={(event) => {
+                      setApprovedAmount(event.target.value);
+                      setFormError("");
+                    }}
+                  />
+                </Field>
+                <Field label="Срок, мес." htmlFor={`approved-term-${application.id}`}>
+                  <input
+                    id={`approved-term-${application.id}`}
+                    className="input"
+                    type="number"
+                    min="1"
+                    step="1"
+                    value={approvedTerm}
+                    onChange={(event) => {
+                      setApprovedTerm(event.target.value);
+                      setFormError("");
+                    }}
+                  />
+                </Field>
+              </div>
+            )}
+
+            {decision === "offer" && (
+              <Field label="Кредитный продукт" htmlFor={`offer-product-${application.id}`}>
+                <select
+                  id={`offer-product-${application.id}`}
+                  className="input"
+                  value={offerProductId}
+                  disabled={isProductsLoading}
+                  onChange={(event) => {
+                    setOfferProductId(event.target.value);
+                    setFormError("");
+                  }}
+                >
+                  {isProductsLoading && <option value="">Загрузка продуктов…</option>}
+                  {!isProductsLoading && offerProducts.length === 0 && (
+                    <option value="">Нет доступных продуктов</option>
+                  )}
+                  {offerProducts.map((product) => (
+                    <option key={product.product_id} value={String(product.product_id)}>
+                      {product.product_name} · {product.percent}%
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+
+            {productsError && <div className="notice notice-warn">{productsError}</div>}
+            {formError && <div className="notice notice-warn">{formError}</div>}
+
             <Field
-              label="Обоснование решения (обязательно)"
+              label={
+                decision === "offer"
+                  ? "Обоснование предложения (обязательно)"
+                  : decision === "reject"
+                    ? "Обоснование отказа (обязательно)"
+                    : "Обоснование решения (обязательно)"
+              }
               htmlFor={`reason-${application.id}`}
-              error={formError}
               hint="Минимум 5 символов"
             >
               <textarea
                 id={`reason-${application.id}`}
                 className={`input${formError ? " has-error" : ""}`}
-                placeholder="Укажите обоснование принятого решения"
+                placeholder={
+                  decision === "offer"
+                    ? "Почему предпринимателю предлагаются эти условия"
+                    : "Укажите обоснование принятого решения"
+                }
                 value={reason}
                 onChange={(event) => {
                   setReason(event.target.value);
@@ -417,9 +552,14 @@ function BankApplicationPanel({ application, company, companyError, isCompanyLoa
                 type="submit"
                 variant="dark"
                 loading={isSubmitting}
-                disabled={!decision || reason.trim().length < 5}
+                disabled={
+                  !decision ||
+                  reason.trim().length < 5 ||
+                  isProductsLoading ||
+                  (decision === "offer" && !offerProductId)
+                }
               >
-                Зафиксировать решение
+                {decision === "offer" ? "Отправить предложение" : "Зафиксировать решение"}
               </Button>
             </div>
           </form>
@@ -429,7 +569,7 @@ function BankApplicationPanel({ application, company, companyError, isCompanyLoa
   );
 }
 
-export default function BankWorkspace({ queue, onDecision }) {
+export default function BankWorkspace({ queue, onDecision, token }) {
   const [selectedId, setSelectedId] = useState(queue[0]?.id ?? null);
 
   const effectiveSelectedId = queue.some((item) => item.id === selectedId)
@@ -467,7 +607,7 @@ export default function BankWorkspace({ queue, onDecision }) {
     if (!selectedApplicationId) return undefined;
     let active = true;
     Promise.all([
-      getLoanApplication(selectedApplicationId),
+      getLoanApplication(selectedApplicationId, token),
       selectedCompanyInn
         ? getLatestFinancialStatement(selectedCompanyInn)
         : Promise.resolve({ ok: false }),
@@ -497,7 +637,7 @@ export default function BankWorkspace({ queue, onDecision }) {
     return () => {
       active = false;
     };
-  }, [selectedApplicationId, selectedCompanyInn]);
+  }, [selectedApplicationId, selectedCompanyInn, token]);
 
   return (
     <div className="page">
@@ -555,6 +695,7 @@ export default function BankWorkspace({ queue, onDecision }) {
               }
               isCompanyLoading={isCompanyLoading}
               onDecision={onDecision}
+              token={token}
             />
           )}
         </div>

@@ -44,6 +44,10 @@ function normalizeDetail(payload) {
   return "Некорректный запрос";
 }
 
+function authHeaders(token) {
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
 export function getApiUrl() {
   return API_URL;
 }
@@ -429,12 +433,12 @@ export async function getLoanProducts({
  * Создание кредитной заявки: backend выполняет скоринг и возвращает карточку.
  * Возвращает { ok: true, application } либо { ok: false, message }.
  */
-export async function createLoanApplication(payload) {
+export async function createLoanApplication(payload, token) {
   let result;
   try {
     result = await request("/api/loan-applications", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authHeaders(token) },
       body: JSON.stringify(payload),
     });
   } catch {
@@ -455,7 +459,7 @@ export async function createLoanApplication(payload) {
 }
 
 /** Список заявок: по ИНН клиента или очередь сотрудника по статусу. */
-export async function getLoanApplications({ inn, status, limit = 50 } = {}) {
+export async function getLoanApplications({ inn, status, limit = 50, token } = {}) {
   const params = new URLSearchParams();
   if (inn) params.set("inn", inn);
   if (status) params.set("status", status);
@@ -463,7 +467,9 @@ export async function getLoanApplications({ inn, status, limit = 50 } = {}) {
 
   let result;
   try {
-    result = await request(`/api/loan-applications?${params.toString()}`);
+    result = await request(`/api/loan-applications?${params.toString()}`, {
+      headers: authHeaders(token),
+    });
   } catch {
     return { ok: false, message: "API недоступен", applications: [] };
   }
@@ -479,10 +485,12 @@ export async function getLoanApplications({ inn, status, limit = 50 } = {}) {
 }
 
 /** Карточка заявки: статус, скоринг, офферы, решение, история. */
-export async function getLoanApplication(applicationId) {
+export async function getLoanApplication(applicationId, token) {
   let result;
   try {
-    result = await request(`/api/loan-applications/${encodeURIComponent(applicationId)}`);
+    result = await request(`/api/loan-applications/${encodeURIComponent(applicationId)}`, {
+      headers: authHeaders(token),
+    });
   } catch {
     return { ok: false, message: "API недоступен" };
   }
@@ -495,21 +503,21 @@ export async function getLoanApplication(applicationId) {
 }
 
 /** Клиент выбирает альтернативное предложение. */
-export async function selectLoanOffer(applicationId, offerId) {
-  return updateOffer(applicationId, offerId, "select");
+export async function selectLoanOffer(applicationId, offerId, token) {
+  return updateOffer(applicationId, offerId, "select", token);
 }
 
 /** Клиент отказывается от альтернативного предложения. */
-export async function declineLoanOffer(applicationId, offerId) {
-  return updateOffer(applicationId, offerId, "decline");
+export async function declineLoanOffer(applicationId, offerId, token) {
+  return updateOffer(applicationId, offerId, "decline", token);
 }
 
-async function updateOffer(applicationId, offerId, action) {
+async function updateOffer(applicationId, offerId, action, token) {
   let result;
   try {
     result = await request(
       `/api/loan-applications/${encodeURIComponent(applicationId)}/offers/${encodeURIComponent(offerId)}/${action}`,
-      { method: "POST" }
+      { method: "POST", headers: authHeaders(token) }
     );
   } catch {
     return { ok: false, message: "API недоступен" };
@@ -523,14 +531,14 @@ async function updateOffer(applicationId, offerId, action) {
 }
 
 /** Решение сотрудника по заявке из ручной проверки. */
-export async function decideLoanApplication(applicationId, payload) {
+export async function decideLoanApplication(applicationId, payload, token) {
   let result;
   try {
     result = await request(
       `/api/loan-applications/${encodeURIComponent(applicationId)}/decision`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...authHeaders(token) },
         body: JSON.stringify(payload),
       }
     );
@@ -542,5 +550,50 @@ export async function decideLoanApplication(applicationId, payload) {
   return {
     ok: false,
     message: normalizeDetail(body) || "Не удалось сохранить решение",
+  };
+}
+
+
+/** Все активные продукты — для формы индивидуального предложения сотрудника. */
+export async function getLoanProductCatalog(token) {
+  let result;
+  try {
+    result = await request("/api/loan-products/catalog", {
+      headers: authHeaders(token),
+    });
+  } catch {
+    return { ok: false, products: [], message: "API недоступен" };
+  }
+  const { response, payload } = result;
+  if (response.ok && Array.isArray(payload)) {
+    return { ok: true, products: payload };
+  }
+  return {
+    ok: false,
+    products: [],
+    message: normalizeDetail(payload) || "Не удалось загрузить каталог продуктов",
+  };
+}
+
+/** Сотрудник формирует индивидуальное предложение. */
+export async function createEmployeeOffer(applicationId, payload, token) {
+  let result;
+  try {
+    result = await request(
+      `/api/loan-applications/${encodeURIComponent(applicationId)}/employee-offer`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", ...authHeaders(token) },
+        body: JSON.stringify(payload),
+      }
+    );
+  } catch {
+    return { ok: false, message: "API недоступен" };
+  }
+  const { response, payload: body } = result;
+  if (response.ok && body) return { ok: true, application: body };
+  return {
+    ok: false,
+    message: normalizeDetail(body) || "Не удалось создать предложение",
   };
 }

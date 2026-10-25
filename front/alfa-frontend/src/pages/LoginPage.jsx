@@ -3,7 +3,7 @@ import { loginUser } from "../api.js";
 import { Button, Field } from "../components/ui.jsx";
 
 const DEMO_ACCOUNTS = [
-  { login: "client", password: "client", role: "предприниматель", note: "ИНН 4217064416" },
+  { login: "client", password: "client", role: "предприниматель", note: "ИНН 3662277634" },
   { login: "bank", password: "bank", role: "сотрудник банка", note: "" },
 ];
 
@@ -51,6 +51,7 @@ export default function LoginPage({ onLogin }) {
       login: result.user.username,
       role: result.user.profile_type === "employee" ? "employee" : "business",
       companyInn: result.user.company_inn,
+      token: result.user.access_token,
     });
   }
 

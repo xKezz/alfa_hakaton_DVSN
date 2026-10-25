@@ -114,11 +114,27 @@ export default function ApplicationDetails({
                 {pendingOffers.map((offer) => (
                   <div className="alternative-card" key={offer.id}>
                     <div>
-                      <div className="alternative-title">{offer.title}</div>
+                      <div className="alternative-title">
+                        {offer.title}
+                        {offer.isEmployeeOffer && (
+                          <span className="badge badge-neutral" style={{ marginLeft: 8 }}>
+                            Предложение сотрудника
+                          </span>
+                        )}
+                      </div>
                       <div className="alternative-meta">
                         {formatMoney(offer.amount)} · <RateValue value={offer.rate} /> ·{" "}
                         {formatMonths(offer.termMonths)}
                       </div>
+                      <div className="hint-sm">
+                        Сформировано: {formatDate(offer.createdAt)} · статус:{" "}
+                        {offer.status === "offered" ? "ожидает вашего решения" : offer.status}
+                      </div>
+                      {offer.reason && (
+                        <div className="notice" style={{ marginTop: 8 }}>
+                          Обоснование сотрудника: {offer.reason}
+                        </div>
+                      )}
                     </div>
                     <div className="row" style={{ gap: 8 }}>
                       <Button
@@ -127,7 +143,7 @@ export default function ApplicationDetails({
                         loading={busyOfferId === offer.id}
                         onClick={() => handleOffer("select", offer.id)}
                       >
-                        Выбрать
+                        Принять предложение
                       </Button>
                       <Button
                         variant="ghost"
@@ -135,7 +151,7 @@ export default function ApplicationDetails({
                         loading={busyOfferId === offer.id}
                         onClick={() => handleOffer("decline", offer.id)}
                       >
-                        Отказаться
+                        Отклонить предложение
                       </Button>
                     </div>
                   </div>

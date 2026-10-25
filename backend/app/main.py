@@ -9,11 +9,12 @@ import re
 from typing import Annotated, Literal
 
 import psycopg
-from fastapi import FastAPI, HTTPException, Path, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg.rows import dict_row
 
 from . import db
+from .auth import create_access_token, require_employee
 from .config import get_settings
 from .loan_applications import router as loan_applications_router
 from .schemas import (
@@ -277,6 +278,11 @@ def login(payload: LoginRequest) -> AuthUser:
         username=row["username"],
         profile_type=row["profile_type"],
         company_inn=row["company_inn"],
+        access_token=create_access_token(
+            username=row["username"],
+            profile_type=row["profile_type"],
+            company_inn=row["company_inn"],
+        ),
     )
 
 
@@ -321,6 +327,46 @@ def get_company(
         raise HTTPException(status_code=404, detail="Компания не найдена")
 
     return Company(**row)
+
+
+LOAN_PRODUCTS_CATALOG_SELECT = """
+    SELECT product_id,
+           product_name,
+           description,
+           business_category,
+           min_amount::float8 AS min_amount,
+           max_amount::float8 AS max_amount,
+           min_term_months,
+           max_term_months,
+           percent::float8 AS percent,
+           loan_purpose,
+           is_active,
+           business_age,
+           min_credit_rating
+      FROM loan_catalog
+     WHERE is_active = TRUE
+     ORDER BY product_id
+"""
+
+
+@app.get(
+    "/api/loan-products/catalog",
+    response_model=list[LoanProduct],
+    summary="Все активные продукты (для формирования предложения сотрудником)",
+    tags=["loan_products"],
+)
+def get_loan_products_catalog(
+    current_user: AuthUser = Depends(require_employee),
+) -> list[LoanProduct]:
+    """Полный активный каталог для формы индивидуального предложения."""
+    try:
+        with db.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(LOAN_PRODUCTS_CATALOG_SELECT)
+            rows = cur.fetchall()
+    except (psycopg.Error, OSError) as exc:
+        logger.error("Ошибка БД при чтении каталога: %s", exc, exc_info=True)
+        raise HTTPException(status_code=503, detail="База данных недоступна") from exc
+    return [LoanProduct(**row) for row in rows]
 
 
 @app.get(

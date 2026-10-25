@@ -10,16 +10,19 @@ from decimal import Decimal
 from typing import Any
 
 import psycopg
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from psycopg.rows import dict_row
 from psycopg.types.json import Jsonb
 
 from . import db
+from .auth import get_current_user, require_business, require_employee
 from .schemas import (
     ApplicationDecisionInfo,
     ApplicationOfferInfo,
     ApplicationHistoryInfo,
     ApplicationScoringInfo,
+    AuthUser,
+    EmployeeOfferCreate,
     ErrorResponse,
     LoanApplicationCreate,
     LoanApplicationDecisionRequest,
@@ -126,6 +129,8 @@ OFFERS_SELECT = """
            o.approved_amount,
            o.approved_term_months,
            o.offer_status,
+           o.offer_source,
+           o.created_by,
            o.created_at,
            o.decided_at
       FROM application_offers AS o
@@ -142,11 +147,19 @@ OFFER_INSERT = """
     RETURNING offer_id
 """
 
+EMPLOYEE_OFFER_INSERT = """
+    INSERT INTO application_offers (
+        application_id, product_id, approved_amount, approved_term_months,
+        offer_source, created_by, offer_status
+    ) VALUES (%s, %s, %s, %s, 'bank_employee', %s, 'offered')
+    RETURNING offer_id
+"""
+
 DECISION_INSERT = """
     INSERT INTO applications_decisions (
-        application_id, product_id, decision_type, decision_source, decided_by,
-        decision_reason, approved_amount, approved_term_months
-    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        application_id, product_id, offer_id, decision_type, decision_source,
+        decided_by, decision_reason, approved_amount, approved_term_months
+    ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
 """
 
 APPLICATION_DETAIL_SELECT = """
@@ -443,6 +456,7 @@ def _persist_scoring_result(application_id: str, application_row: dict, score: d
                         (
                             application_id,
                             int(application_row["product_id"]),
+                            None,
                             decision_type,
                             "automatic",
                             None,
@@ -457,6 +471,7 @@ def _persist_scoring_result(application_id: str, application_row: dict, score: d
                         (
                             application_id,
                             int(application_row["product_id"]),
+                            None,
                             decision_type,
                             "automatic",
                             None,
@@ -619,6 +634,19 @@ def _fetch_detail(application_id: str) -> LoanApplicationDetail:
             decided_at=decision["decided_at"],
         )
 
+    # Причина индивидуального предложения сотрудника хранится в
+    # applications_history.offer_created (отдельного поля в offers нет).
+    employee_offer_reason = next(
+        (
+            row.get("event_description")
+            for row in history_rows
+            if row.get("event_type") == "offer_created"
+            and row.get("actor_username")
+            and row.get("event_description")
+        ),
+        None,
+    )
+
     offers = [
         ApplicationOfferInfo(
             offer_id=row["offer_id"],
@@ -628,6 +656,13 @@ def _fetch_detail(application_id: str) -> LoanApplicationDetail:
             approved_amount=float(row["approved_amount"]),
             approved_term_months=row["approved_term_months"],
             status=row["offer_status"],
+            source=row.get("offer_source") or "automatic",
+            created_by=row.get("created_by"),
+            reason=(
+                employee_offer_reason
+                if (row.get("offer_source") or "automatic") == "bank_employee"
+                else None
+            ),
             created_at=row["created_at"],
             decided_at=row.get("decided_at"),
         )
@@ -676,9 +711,17 @@ def _fetch_detail(application_id: str) -> LoanApplicationDetail:
         503: {"model": ErrorResponse, "description": "База данных недоступна"},
     },
 )
-def create_loan_application(payload: LoanApplicationCreate) -> LoanApplicationDetail:
+def create_loan_application(
+    payload: LoanApplicationCreate,
+    current_user: AuthUser = Depends(require_business),
+) -> LoanApplicationDetail:
     """Сохраняет заявку, вызывает существующий скоринг и маршрутизирует её."""
     _validate_inn(payload.inn)
+    if payload.inn != current_user.company_inn:
+        raise HTTPException(
+            status_code=403,
+            detail="Нельзя создать заявку от имени чужой компании",
+        )
     application_id = str(uuid.uuid4())
 
     try:
@@ -821,14 +864,22 @@ def list_loan_applications(
     ),
     inn: str | None = Query(default=None, description="ИНН клиента для его личного кабинета"),
     limit: int = Query(default=50, ge=1, le=100),
+    current_user: AuthUser = Depends(get_current_user),
 ) -> list[LoanApplicationSummary]:
-    """Очередь сотрудника (по умолчанию manual_review) или заявки клиента по ИНН."""
+    """Очередь сотрудника (manual_review) или только свои заявки предпринимателя."""
     if status is not None and status not in LOAN_APPLICATION_STATUSES:
         raise HTTPException(
             status_code=422,
             detail="Недопустимый статус. Допустимые: " + ", ".join(LOAN_APPLICATION_STATUSES),
         )
-    if inn is not None:
+    if current_user.profile_type == "business":
+        own_inn = current_user.company_inn
+        if not own_inn:
+            raise HTTPException(status_code=403, detail="У пользователя не привязана компания")
+        if inn is not None and inn != own_inn:
+            raise HTTPException(status_code=403, detail="Доступ только к заявкам своей компании")
+        inn = own_inn
+    elif inn is not None:
         _validate_inn(inn)
 
     conditions: list[str] = []
@@ -888,8 +939,105 @@ def list_loan_applications(
         503: {"model": ErrorResponse, "description": "База данных недоступна"},
     },
 )
-def get_loan_application(application_id: str) -> LoanApplicationDetail:
-    """Карточка заявки для клиента и сотрудника."""
+def get_loan_application(
+    application_id: str,
+    current_user: AuthUser = Depends(get_current_user),
+) -> LoanApplicationDetail:
+    """Карточка заявки: предприниматель видит только заявки своей компании."""
+    detail = _fetch_detail(application_id)
+    if (
+        current_user.profile_type == "business"
+        and detail.inn != current_user.company_inn
+    ):
+        raise HTTPException(status_code=403, detail="Доступ только к заявкам своей компании")
+    return detail
+
+
+@router.post(
+    "/{application_id}/employee-offer",
+    response_model=LoanApplicationDetail,
+    status_code=201,
+    summary="Сотрудник формирует индивидуальное предложение предпринимателю",
+    responses={
+        403: {"model": ErrorResponse, "description": "Нет прав сотрудника"},
+        404: {"model": ErrorResponse, "description": "Заявка или продукт не найдены"},
+        409: {"model": ErrorResponse, "description": "Заявка не находится на ручной проверке"},
+        422: {"model": ErrorResponse, "description": "Некорректные данные предложения"},
+        503: {"model": ErrorResponse, "description": "База данных недоступна"},
+    },
+)
+def create_employee_offer(
+    application_id: str,
+    payload: EmployeeOfferCreate,
+    current_user: AuthUser = Depends(require_employee),
+) -> LoanApplicationDetail:
+    """Создаёт предложение сотрудника; заявка ждёт решения предпринимателя."""
+    try:
+        with db.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
+            cur.execute(
+                "SELECT application_id, product_id, application_status "
+                "FROM loan_applications WHERE application_id = %s FOR UPDATE",
+                (application_id,),
+            )
+            application = cur.fetchone()
+            if application is None:
+                raise HTTPException(status_code=404, detail="Заявка не найдена")
+            if application["application_status"] != "manual_review":
+                raise HTTPException(
+                    status_code=409,
+                    detail="Индивидуальное предложение можно создать только на ручной проверке",
+                )
+
+            cur.execute(
+                "SELECT product_id FROM loan_catalog WHERE product_id = %s AND is_active = TRUE",
+                (payload.product_id,),
+            )
+            if cur.fetchone() is None:
+                raise HTTPException(
+                    status_code=422,
+                    detail="Выбранный кредитный продукт не найден или неактивен",
+                )
+
+            cur.execute(
+                EMPLOYEE_OFFER_INSERT,
+                (
+                    application_id,
+                    payload.product_id,
+                    payload.approved_amount,
+                    payload.approved_term_months,
+                    current_user.username,
+                ),
+            )
+            offer_id = cur.fetchone()["offer_id"]
+
+            cur.execute(
+                "UPDATE loan_applications SET application_status = 'offer_pending', "
+                "updated_at = CURRENT_TIMESTAMP WHERE application_id = %s",
+                (application_id,),
+            )
+            cur.execute(
+                HISTORY_INSERT,
+                (
+                    application_id,
+                    "offer_created",
+                    current_user.username,
+                    "manual_review",
+                    "offer_pending",
+                    payload.reason,
+                ),
+            )
+            conn.commit()
+    except HTTPException:
+        raise
+    except (psycopg.Error, OSError) as exc:
+        raise _sql_error(exc, "создании индивидуального предложения") from exc
+
+    logger.info(
+        "Сотрудник %s создал предложение %s по заявке %s",
+        current_user.username,
+        offer_id,
+        application_id,
+    )
     return _fetch_detail(application_id)
 
 
@@ -908,6 +1056,7 @@ def get_loan_application(application_id: str) -> LoanApplicationDetail:
 def decide_loan_application(
     application_id: str,
     payload: LoanApplicationDecisionRequest,
+    current_user: AuthUser = Depends(require_employee),
 ) -> LoanApplicationDetail:
     """Принимает окончательное решение сотрудника; автоматические решения не перепроверяются."""
     try:
@@ -927,22 +1076,14 @@ def decide_loan_application(
                     detail="Заявка не находится на ручной проверке; автоматические решения окончательны",
                 )
 
-            cur.execute(
-                "SELECT profile_type FROM login WHERE username = %s",
-                (payload.decided_by,),
-            )
-            employee = cur.fetchone()
-            if employee is None or employee["profile_type"] != "employee":
-                raise HTTPException(
-                    status_code=403,
-                    detail="Решение может принять только сотрудник банка",
-                )
-
             if payload.decision == "approved":
-                approved_amount = payload.approved_amount or application["requested_amount"]
-                approved_term = (
-                    payload.approved_term_months or application["requested_term_months"]
-                )
+                if payload.approved_amount is None or payload.approved_term_months is None:
+                    raise HTTPException(
+                        status_code=422,
+                        detail="Для одобрения обязательно укажите сумму и срок",
+                    )
+                approved_amount = payload.approved_amount
+                approved_term = payload.approved_term_months
                 if Decimal(approved_amount) <= 0 or int(approved_term) <= 0:
                     raise HTTPException(
                         status_code=422,
@@ -957,9 +1098,10 @@ def decide_loan_application(
                 (
                     application_id,
                     int(application["product_id"]),
+                    None,
                     payload.decision,
                     "bank_employee",
-                    payload.decided_by,
+                    current_user.username,
                     payload.reason,
                     approved_amount,
                     approved_term,
@@ -976,7 +1118,7 @@ def decide_loan_application(
                 (
                     application_id,
                     "decision_made",
-                    payload.decided_by,
+                    current_user.username,
                     "manual_review",
                     payload.decision,
                     payload.reason or "Решение сотрудника банка",
@@ -1004,12 +1146,13 @@ def decide_loan_application(
 def select_application_offer(
     application_id: str,
     offer_id: int,
+    current_user: AuthUser = Depends(require_business),
 ) -> LoanApplicationDetail:
     """Фиксирует выбранный оффер и переводит заявку в approved без повторного скоринга."""
     try:
         with db.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
-                "SELECT application_id, product_id, application_status, "
+                "SELECT application_id, inn, product_id, application_status, "
                 "requested_amount, requested_term_months "
                 "FROM loan_applications WHERE application_id = %s FOR UPDATE",
                 (application_id,),
@@ -1017,6 +1160,8 @@ def select_application_offer(
             application = cur.fetchone()
             if application is None:
                 raise HTTPException(status_code=404, detail="Заявка не найдена")
+            if application["inn"] != current_user.company_inn:
+                raise HTTPException(status_code=403, detail="Доступ только к заявкам своей компании")
             if application["application_status"] != "offer_pending":
                 raise HTTPException(
                     status_code=409,
@@ -1025,7 +1170,7 @@ def select_application_offer(
 
             cur.execute(
                 "SELECT offer_id, product_id, approved_amount, approved_term_months, "
-                "offer_status FROM application_offers "
+                "offer_status, offer_source, created_by FROM application_offers "
                 "WHERE offer_id = %s AND application_id = %s FOR UPDATE",
                 (offer_id, application_id),
             )
@@ -1034,6 +1179,25 @@ def select_application_offer(
                 raise HTTPException(status_code=404, detail="Предложение не найдено")
             if offer["offer_status"] != "offered":
                 raise HTTPException(status_code=409, detail="Предложение уже обработано")
+
+            # Обоснование индивидуального предложения сотрудника хранится в
+            # applications_history.offer_created — отдельного поля в offers нет.
+            cur.execute(
+                "SELECT event_description FROM applications_history "
+                "WHERE application_id = %s AND event_type = 'offer_created' "
+                "ORDER BY created_at DESC, history_id DESC LIMIT 1",
+                (application_id,),
+            )
+            offer_event = cur.fetchone()
+            employee_offer_reason = offer_event["event_description"] if offer_event else None
+            is_employee_offer = offer["offer_source"] == "bank_employee"
+            decision_source = "bank_employee" if is_employee_offer else "automatic"
+            decided_by = offer["created_by"] if is_employee_offer else None
+            decision_reason = (
+                employee_offer_reason
+                if is_employee_offer and employee_offer_reason
+                else "Клиент выбрал альтернативное предложение"
+            )
 
             cur.execute(
                 "UPDATE application_offers SET offer_status = 'selected', "
@@ -1056,10 +1220,11 @@ def select_application_offer(
                 (
                     application_id,
                     int(offer["product_id"]),
+                    offer_id,
                     "approved",
-                    "automatic",
-                    None,
-                    "Клиент выбрал альтернативное предложение",
+                    decision_source,
+                    decided_by,
+                    decision_reason,
                     offer["approved_amount"],
                     int(offer["approved_term_months"]),
                 ),
@@ -1069,10 +1234,10 @@ def select_application_offer(
                 (
                     application_id,
                     "offer_selected",
-                    None,
+                    current_user.username,
                     "offer_pending",
                     "approved",
-                    f"Клиент выбрал предложение offer_id={offer_id}",
+                    f"Предприниматель выбрал предложение offer_id={offer_id}",
                 ),
             )
             cur.execute(
@@ -1080,10 +1245,10 @@ def select_application_offer(
                 (
                     application_id,
                     "decision_made",
-                    None,
+                    current_user.username,
                     "offer_pending",
                     "approved",
-                    "Клиент выбрал альтернативное предложение; повторный скоринг не требуется",
+                    "Предложение принято; повторный скоринг не требуется",
                 ),
             )
             conn.commit()
@@ -1108,18 +1273,21 @@ def select_application_offer(
 def decline_application_offer(
     application_id: str,
     offer_id: int,
+    current_user: AuthUser = Depends(require_business),
 ) -> LoanApplicationDetail:
     """Отмечает отказ; если отказ от всех офферов — финальный отказ по заявке."""
     try:
         with db.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
             cur.execute(
-                "SELECT application_id, product_id, application_status "
+                "SELECT application_id, inn, product_id, application_status "
                 "FROM loan_applications WHERE application_id = %s FOR UPDATE",
                 (application_id,),
             )
             application = cur.fetchone()
             if application is None:
                 raise HTTPException(status_code=404, detail="Заявка не найдена")
+            if application["inn"] != current_user.company_inn:
+                raise HTTPException(status_code=403, detail="Доступ только к заявкам своей компании")
             if application["application_status"] != "offer_pending":
                 raise HTTPException(
                     status_code=409,
@@ -1127,7 +1295,8 @@ def decline_application_offer(
                 )
 
             cur.execute(
-                "SELECT offer_id, offer_status FROM application_offers "
+                "SELECT offer_id, offer_status, offer_source, created_by "
+                "FROM application_offers "
                 "WHERE offer_id = %s AND application_id = %s FOR UPDATE",
                 (offer_id, application_id),
             )
@@ -1155,10 +1324,10 @@ def decline_application_offer(
                     (
                         application_id,
                         "offer_declined",
-                        None,
+                        current_user.username,
                         "offer_pending",
                         "offer_pending",
-                        f"Клиент отказался от предложения offer_id={offer_id}",
+                        f"Предприниматель отклонил предложение offer_id={offer_id}",
                     ),
                 )
             else:
@@ -1172,23 +1341,33 @@ def decline_application_offer(
                     (
                         application_id,
                         int(application["product_id"]),
+                        offer_id,
                         "rejected",
                         "automatic",
                         None,
-                        "Клиент отказался от всех альтернативных предложений",
+                        (
+                            "Предприниматель отклонил предложение"
+                            if offer["offer_source"] == "bank_employee"
+                            else "Клиент отказался от всех альтернативных предложений"
+                        ),
                         None,
                         None,
                     ),
+                )
+                decline_reason = (
+                    "Предприниматель отклонил предложение"
+                    if offer["offer_source"] == "bank_employee"
+                    else "Клиент отказался от всех альтернативных предложений"
                 )
                 cur.execute(
                     HISTORY_INSERT,
                     (
                         application_id,
                         "offer_declined",
-                        None,
+                        current_user.username,
                         "offer_pending",
                         "rejected",
-                        f"Клиент отказался от предложения offer_id={offer_id}",
+                        f"Предприниматель отклонил предложение offer_id={offer_id}",
                     ),
                 )
                 cur.execute(
@@ -1196,10 +1375,10 @@ def decline_application_offer(
                     (
                         application_id,
                         "decision_made",
-                        None,
+                        current_user.username,
                         "offer_pending",
                         "rejected",
-                        "Клиент отказался от всех альтернативных предложений",
+                        decline_reason,
                     ),
                 )
             conn.commit()
