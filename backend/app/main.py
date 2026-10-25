@@ -9,7 +9,7 @@ import re
 from typing import Annotated, Literal
 
 import psycopg
-from fastapi import FastAPI, HTTPException, Path, Query
+from fastapi import FastAPI, HTTPException, Path, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg.rows import dict_row
 
@@ -89,10 +89,41 @@ LOGIN_SELECT = """
      WHERE username = %(username)s
 """
 
+# SHA-256 в hex. В БД могут временно лежать и plaintext-пароли, добавленные
+# вручную через SQL; такие записи поддерживаем и автоматически переводим в хеш.
+_PASSWORD_HASH_RE = re.compile(r"^[0-9a-fA-F]{64}$")
+
 
 def _hash_password(password: str) -> str:
-    """SHA-256-хеш пароля (пароли в БД хранятся только в виде хеша)."""
+    """SHA-256-хеш пароля."""
     return hashlib.sha256(password.encode("utf-8")).hexdigest()
+
+
+def _password_matches(stored: str, password: str) -> bool:
+    """Сравнивает пароль с SHA-256-хешем или (для ручных данных) с plaintext."""
+    if stored is None:
+        return False
+    stored = str(stored)
+    # Сначала прямое совпадение: поддерживает и future plaintext-пароли,
+    # в том числе случайно похожие на hex-строку.
+    if hmac.compare_digest(stored, password):
+        return True
+    if _PASSWORD_HASH_RE.fullmatch(stored):
+        return hmac.compare_digest(stored.lower(), _hash_password(password))
+    return False
+
+
+def _upgrade_plaintext_password(username: str, password: str) -> None:
+    """Переводит plaintext-пароль в SHA-256, не мешая входу при ошибке."""
+    try:
+        with db.connection() as conn, conn.cursor() as cur:
+            cur.execute(
+                "UPDATE login SET password = %(password)s WHERE username = %(username)s",
+                {"username": username, "password": _hash_password(password)},
+            )
+            conn.commit()
+    except (psycopg.Error, OSError) as exc:
+        logger.warning("Не удалось захешировать пароль пользователя %s: %s", username, exc)
 
 LOAN_PRODUCTS_SELECT = """
     SELECT product_id,
@@ -131,6 +162,40 @@ LOAN_PRODUCTS_SELECT = """
      ORDER BY percent ASC, product_id
 """
 
+LOAN_PRODUCTS_NEAREST_SELECT = """
+    SELECT product_id,
+           product_name,
+           description,
+           business_category,
+           min_amount::float8 AS min_amount,
+           max_amount::float8 AS max_amount,
+           min_term_months,
+           max_term_months,
+           percent::float8 AS percent,
+           loan_purpose,
+           is_active,
+           business_age,
+           min_credit_rating
+      FROM loan_catalog
+     WHERE is_active = TRUE
+       AND business_category IN (%(business_category)s, 'both')
+     ORDER BY (
+         CASE
+             WHEN %(amount)s < min_amount THEN min_amount - %(amount)s
+             WHEN %(amount)s > max_amount THEN %(amount)s - max_amount
+             ELSE 0
+         END
+         + CASE
+             WHEN %(term_months)s < min_term_months
+                 THEN (min_term_months - %(term_months)s) * 100000
+             WHEN %(term_months)s > max_term_months
+                 THEN (%(term_months)s - max_term_months) * 100000
+             ELSE 0
+         END
+     ) ASC, product_id ASC
+     LIMIT 5
+"""
+
 FINANCIAL_SELECT = f"""
     SELECT financial_id, inn, report_year, {_FINANCIAL_COLUMNS}
       FROM financial_statements
@@ -154,6 +219,7 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Loan-Products-Fallback"],
 )
 
 app.include_router(loan_applications_router)
@@ -200,8 +266,12 @@ def login(payload: LoginRequest) -> AuthUser:
         logger.error("Ошибка БД при авторизации пользователя: %s", exc, exc_info=True)
         raise HTTPException(status_code=503, detail="База данных недоступна") from exc
 
-    if row is None or not hmac.compare_digest(row["password"], _hash_password(payload.password)):
+    if row is None or not _password_matches(row["password"], payload.password):
         raise HTTPException(status_code=401, detail="Неверный логин или пароль")
+
+    # Пароль мог быть добавлен вручную как plaintext — нормализуем в хеш.
+    if not _PASSWORD_HASH_RE.fullmatch(str(row["password"])):
+        _upgrade_plaintext_password(row["username"], payload.password)
 
     return AuthUser(
         username=row["username"],
@@ -264,6 +334,7 @@ def get_company(
     tags=["loan_products"],
 )
 def get_loan_products(
+    response: Response,
     amount: Annotated[
         float,
         Query(gt=0, description="Запрашиваемая сумма кредита"),
@@ -277,15 +348,8 @@ def get_loan_products(
         Query(description="Категория бизнеса заявителя"),
     ] = "both",
     purpose: Annotated[
-        Literal[
-            "working_capital",
-            "equipment",
-            "business_expansion",
-            "refinancing",
-            "other",
-        ]
-        | None,
-        Query(description="Код цели кредитования из loan_catalog, например working_capital"),
+        str | None,
+        Query(description="Код цели кредитования из loan_catalog"),
     ] = None,
     business_age_months: Annotated[
         int | None,
@@ -299,6 +363,15 @@ def get_loan_products(
             description="Рассчитанный скоринг заявителя 0–1000 (не выбирается клиентом)",
         ),
     ] = None,
+    allow_fallback: Annotated[
+        bool,
+        Query(
+            description=(
+                "Если точных совпадений нет, вернуть продукты, расширив "
+                "фильтр цели/возраста бизнеса (для frontend)"
+            )
+        ),
+    ] = False,
 ) -> list[LoanProduct]:
     """Возвращает активные продукты из ``loan_catalog``, подходящие под параметры.
 
@@ -309,7 +382,7 @@ def get_loan_products(
         "amount": amount,
         "term_months": term_months,
         "business_category": business_category,
-        "purpose": purpose,
+        "purpose": purpose or None,
         "business_age_months": business_age_months,
         "credit_rating": credit_rating,
     }
@@ -318,6 +391,46 @@ def get_loan_products(
         with db.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
             cur.execute(LOAN_PRODUCTS_SELECT, params)
             rows = cur.fetchall()
+
+            # Мягкий fallback для frontend: если по цели/возрасту ничего нет,
+            # пробуем вернуть продукты, подходящие по сумме, сроку и категории.
+            if not rows and allow_fallback:
+                attempts: list[tuple[str, dict]] = []
+                if params["purpose"] is not None:
+                    attempts.append(("purpose", {**params, "purpose": None}))
+                if params["business_age_months"] is not None:
+                    attempts.append(("age", {**params, "business_age_months": None}))
+                if (
+                    params["purpose"] is not None
+                    and params["business_age_months"] is not None
+                ):
+                    attempts.append(
+                        (
+                            "purpose+age",
+                            {**params, "purpose": None, "business_age_months": None},
+                        )
+                    )
+                for fallback_name, fallback_params in attempts:
+                    cur.execute(LOAN_PRODUCTS_SELECT, fallback_params)
+                    rows = cur.fetchall()
+                    if rows:
+                        response.headers["X-Loan-Products-Fallback"] = fallback_name
+                        break
+
+                # Совсем нет продуктов по сумме/сроку — показываем ближайшие
+                # по категории; frontend скорректирует сумму/срок под продукт.
+                if not rows:
+                    cur.execute(
+                        LOAN_PRODUCTS_NEAREST_SELECT,
+                        {
+                            "business_category": business_category,
+                            "amount": amount,
+                            "term_months": term_months,
+                        },
+                    )
+                    rows = cur.fetchall()
+                    if rows:
+                        response.headers["X-Loan-Products-Fallback"] = "amount+term"
     except (psycopg.Error, OSError) as exc:
         logger.error("Ошибка БД при подборе кредитных продуктов: %s", exc, exc_info=True)
         raise HTTPException(status_code=503, detail="База данных недоступна") from exc

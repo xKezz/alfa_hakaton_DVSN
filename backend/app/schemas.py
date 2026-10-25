@@ -133,11 +133,15 @@ LOAN_APPLICATION_STATUSES = (
     "rejected",
 )
 
+# Пять целей из документации (StakeHolders and User Stories, US-04).
 LOAN_PURPOSES = (
-    "working_capital",
-    "equipment",
-    "business_expansion",
-    "refinancing",
+    "launch_and_start",
+    "operational_activity",
+    "development_and_scaling",
+    "strategic_goals",
+    "business_protection",
+    # Специальная цель «Другое» не входит в пять целей, но используется
+    # правилом ручной проверки.
     "other",
 )
 

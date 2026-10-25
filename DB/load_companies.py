@@ -2,7 +2,7 @@ import csv
 import psycopg2
 from psycopg2 import extras
 
-CSV_PATH = '/home/xkezz/projects/alfa_hakaton_DVSN/DB/df_companies_clean.csv'
+CSV_PATH = '/home/xkezz/projects/alfa_hakaton_DVSN/DB/df_companies.csv'
 DB = "alfa-hakaton"
 USER = "postgres"
 PASSWORD = "postgres"
@@ -10,6 +10,34 @@ HOST = "localhost"
 PORT = 5432
 
 BATCH_SIZE = 5000
+
+def normalize_inn(inn_raw: str, status: str) -> str:
+    """
+    Простое правило:
+    - 10 цифр после int() → ИП (оставляем 10)
+    - 9 цифр после int() → ООО (дописываем 1 ноль слева → 10 цифр)
+    """
+    s = inn_raw.strip()
+    if not s.isdigit():
+        return s
+    norm = str(int(s))  # убираем все ведущие нули
+    if len(norm) == 9:
+        # ООО: 9 цифр → добавляем 1 ноль слева = 10 цифр
+        return '0' + norm
+    # ИП: 10 цифр (или другие случаи) — оставляем как есть
+    return norm
+
+
+def clean_company_name(name: str) -> str:
+    """
+    Убирает нереалистичный суффикс '.0' в конце названия,
+    оставшийся от float-экспорта CSV: 'Company4217066710.0' -> 'Company4217066710'.
+    """
+    name = (name or '').strip()
+    if name.endswith('.0'):
+        name = name[:-2]
+    return name
+
 
 conn = psycopg2.connect(dbname=DB, user=USER, password=PASSWORD, host=HOST, port=PORT)
 cur = conn.cursor()
@@ -21,19 +49,27 @@ batch = []
 with open(CSV_PATH, 'r', encoding='utf-8-sig') as f:
     reader = csv.DictReader(f)
     for row in reader:
-        inn = row['inn'].strip()
+        inn_raw = row['inn'].strip()
+        status = (row['company_status'] or '').strip()
+        
+        inn = normalize_inn(inn_raw, status)
+        
         if len(inn) not in (10, 12):
             skipped += 1
             continue
 
+        region_code = row['region_code']
+        if region_code and region_code.endswith('.0'):
+            region_code = region_code[:-2]
+
         batch.append((
             inn,
-            row['company_name'],
+            clean_company_name(row['company_name']),
             row['registration_date'] or None,
             row['company_status'] or None,
             row['is_simplified_tax'] in ('1', 't', 'true', 'True'),
             row['industry'] or None,
-            row['region_code'] or None,
+            region_code,
             row['dissolution_flag'] in ('1', 't', 'true', 'True'),
         ))
 

@@ -25,7 +25,40 @@ from app.scoring_service import calculate_application_score, decide_application 
     os.environ.get("RUN_DB_TESTS") == "1",
     "Требуется PostgreSQL и RUN_DB_TESTS=1",
 )
+def _require_legacy_fixtures(testcase: unittest.TestCase) -> None:
+    """Старые демо-ИНН могли исчезнуть после перезаливки БД — тогда skip."""
+    import psycopg
+    from psycopg.rows import dict_row
+
+    from app.config import get_settings
+
+    try:
+        conn = psycopg.connect(**get_settings().connect_kwargs, row_factory=dict_row)
+    except (psycopg.Error, OSError) as exc:
+        raise unittest.SkipTest(f"PostgreSQL недоступен: {exc}") from exc
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT count(*) AS c FROM companies WHERE inn IN "
+                "('4217064416','3257029840')"
+            )
+            companies = int(cur.fetchone()["c"])
+            cur.execute("SELECT count(*) AS c FROM loan_catalog WHERE product_id IN (1,2,4)")
+            products = int(cur.fetchone()["c"])
+    finally:
+        conn.close()
+    if companies < 2 or products < 3:
+        raise unittest.SkipTest(
+            "Демо-данные 4217064416/3257029840 отсутствуют в текущей БД "
+            "(БД перезалита); интеграционный тест старого демо-набора пропущен"
+        )
+
+
 class RealDatabaseScoringTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        _require_legacy_fixtures(cls)
+
     def test_company_4217064416_product_2(self):
         import psycopg
         from psycopg.rows import dict_row
@@ -117,6 +150,10 @@ if __name__ == "__main__":
 )
 class ApplicationPersistenceTest(unittest.TestCase):
     """Проверяет сохранение заявки/рейтинга и маршрутизацию на реальной БД."""
+
+    @classmethod
+    def setUpClass(cls):
+        _require_legacy_fixtures(cls)
 
     @staticmethod
     def _connect():

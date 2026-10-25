@@ -91,18 +91,22 @@ export const BUSINESS_AGE_TYPES = [
 ];
 
 export const LOAN_PURPOSES = [
-  { value: "working_capital", label: "Пополнение оборотных средств" },
-  { value: "equipment", label: "Покупка оборудования" },
-  { value: "business_expansion", label: "Развитие бизнеса" },
-  { value: "refinancing", label: "Рефинансирование" },
+  { value: "launch_and_start", label: "Запуск и старт" },
+  { value: "operational_activity", label: "Поддержка операционной деятельности" },
+  { value: "development_and_scaling", label: "Развитие и масштабирование" },
+  { value: "strategic_goals", label: "Стратегические цели" },
+  { value: "business_protection", label: "Защита бизнеса" },
   { value: "other", label: "Другое" },
 ];
 
 export const PURPOSE_ICONS = {
+  launch_and_start: "🚀",
+  operational_activity: "💼",
+  development_and_scaling: "📈",
+  strategic_goals: "🎯",
+  business_protection: "🛡",
   working_capital: "💼",
-  equipment: "🏭",
   business_expansion: "📈",
-  refinancing: "🔄",
   other: "💳",
 };
 

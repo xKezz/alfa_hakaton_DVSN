@@ -100,8 +100,13 @@ export default function CreditCalculator({ defaultCompany, health, onApply }) {
         if (!active) return;
         setCatalog(
           result.ok
-            ? { key: queryKey, products: result.products, error: null }
-            : { key: queryKey, products: [], error: result.message }
+            ? {
+                key: queryKey,
+                products: result.products,
+                error: null,
+                fallback: result.fallback || null,
+              }
+            : { key: queryKey, products: [], error: result.message, fallback: null }
         );
       });
     }, 250);
@@ -115,10 +120,29 @@ export default function CreditCalculator({ defaultCompany, health, onApply }) {
   const isCatalogLoading = catalog.key !== queryKey && !catalog.error;
   const catalogProducts = catalog.key === queryKey ? catalog.products : [];
   const catalogError = catalog.key === queryKey ? catalog.error : null;
+  const catalogFallback = catalog.key === queryKey ? catalog.fallback || null : null;
 
   const products = catalogProducts.map(normalizeProduct);
 
   const selectedProduct = products.find((product) => product.id === selectedProductId) || null;
+  const fallbackAdjustsAmountTerm = Boolean(
+    catalogFallback && catalogFallback.includes("amount+term")
+  );
+  const effectiveAmount =
+    selectedProduct && fallbackAdjustsAmountTerm
+      ? Math.min(Math.max(amount, selectedProduct.minAmount), selectedProduct.maxAmount)
+      : amount;
+  const effectiveTermYears =
+    selectedProduct && fallbackAdjustsAmountTerm
+      ? Math.min(
+          Math.max(
+            termYears,
+            Math.max(1, Math.ceil(Number(selectedProduct.minTermMonths || 1) / 12))
+          ),
+          Math.max(1, Math.min(10, Math.floor(Number(selectedProduct.maxTermMonths || 120) / 12)))
+        )
+      : termYears;
+  const effectiveMonths = effectiveTermYears * 12;
 
   function resetForm(product) {
     setSelectedProductId(product.id);
@@ -280,8 +304,8 @@ export default function CreditCalculator({ defaultCompany, health, onApply }) {
     try {
       await onApply({
         product: selectedProduct,
-        amount,
-        termMonths: months,
+        amount: effectiveAmount,
+        termMonths: effectiveMonths,
         purpose: form.purpose,
         inn: String(form.inn).trim(),
         company: lookup.company || defaultCompany,
@@ -425,6 +449,14 @@ export default function CreditCalculator({ defaultCompany, health, onApply }) {
             />
           )}
 
+          {!isCatalogLoading && !catalogError && catalogFallback && (
+            <div className="notice" style={{ marginBottom: 12 }}>
+              {fallbackAdjustsAmountTerm
+                ? "Точных совпадений по сумме и сроку нет — показаны ближайшие продукты. При подаче заявки сумма/срок будут скорректированы под выбранный продукт."
+                : "Точных совпадений по выбранной цели/возрасту бизнеса нет — показаны продукты, подходящие по сумме, сроку и категории."}
+            </div>
+          )}
+
           {!isCatalogLoading && !catalogError && products.length > 0 && (
             <p className="hint-sm" style={{ marginBottom: 4 }}>
               Найдено продуктов: {products.length}
@@ -508,8 +540,16 @@ export default function CreditCalculator({ defaultCompany, health, onApply }) {
                   {isSelected && selectedProduct && (
                     <form className="apply-panel" onSubmit={handleSubmit} noValidate>
                       <h4 className="apply-title">
-                        Заявка на «{product.title}» · {formatMoney(amount)} · {months} мес.
+                        Заявка на «{product.title}» · {formatMoney(effectiveAmount)} ·{" "}
+                        {effectiveMonths} мес.
                       </h4>
+
+                      {fallbackAdjustsAmountTerm && (
+                        <div className="notice" style={{ marginBottom: 12 }}>
+                          Сумма и срок скорректированы под условия продукта:
+                          {" "}{formatMoney(effectiveAmount)} на {effectiveMonths} мес.
+                        </div>
+                      )}
 
                       <div className="form-grid">
                         <Field label="ИНН компании" htmlFor="applyInn" error={fieldErrors.inn}>

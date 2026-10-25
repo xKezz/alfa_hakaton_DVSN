@@ -19,7 +19,7 @@ import EntrepreneurDashboard from "./pages/EntrepreneurDashboard.jsx";
 import LoginPage from "./pages/LoginPage.jsx";
 import ProfilePage from "./pages/ProfilePage.jsx";
 
-const SESSION_KEY = "alfaSession";
+const SESSION_KEY = "alfaSessionAuthV2";
 
 const EVENT_TITLES = {
   application_submitted: "Заявка подана",
@@ -267,10 +267,14 @@ export default function App() {
   }
 
   async function handleApply(draft) {
+    // «Другое» — специальная цель для ручной проверки: сохраняем именно её,
+    // даже если у выбранного продукта своя цель.
     const chosenPurpose =
-      draft.product.loanPurpose && draft.product.loanPurpose !== "other"
-        ? draft.product.loanPurpose
-        : draft.purpose;
+      draft.purpose === "other"
+        ? "other"
+        : draft.product.loanPurpose && draft.product.loanPurpose !== "other"
+          ? draft.product.loanPurpose
+          : draft.purpose;
     const result = await createLoanApplication({
       inn: draft.inn,
       product_id: draft.product.id,

@@ -247,7 +247,13 @@ def _validate_product_request(product: dict, payload: LoanApplicationCreate, com
 
     product_purpose = product.get("loan_purpose")
     # loan_purpose = 'other' у продукта означает универсальный продукт.
-    if product_purpose not in (None, "other", payload.loan_purpose):
+    # Если клиент выбрал специальную цель «Другое», продукт может иметь
+    # собственную цель: такая заявка всё равно уйдёт на ручную проверку.
+    if payload.loan_purpose != "other" and product_purpose not in (
+        None,
+        "other",
+        payload.loan_purpose,
+    ):
         raise HTTPException(
             status_code=422,
             detail="Цель кредита не соответствует выбранному продукту",

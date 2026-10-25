@@ -366,6 +366,7 @@ export async function getLoanProducts({
   businessCategory,
   purpose,
   businessAgeMonths,
+  allowFallback = true,
 }) {
   const params = new URLSearchParams({
     amount: String(amount),
@@ -377,6 +378,7 @@ export async function getLoanProducts({
   if (businessAgeMonths !== null && businessAgeMonths !== undefined) {
     params.set("business_age_months", String(businessAgeMonths));
   }
+  if (allowFallback) params.set("allow_fallback", "true");
 
   let result;
   try {
@@ -415,7 +417,11 @@ export async function getLoanProducts({
     };
   }
 
-  return { ok: true, products: payload };
+  return {
+    ok: true,
+    products: payload,
+    fallback: response.headers.get("x-loan-products-fallback") || null,
+  };
 }
 
 

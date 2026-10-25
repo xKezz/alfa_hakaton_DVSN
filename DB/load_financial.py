@@ -2,7 +2,7 @@ import csv
 import psycopg2
 from psycopg2 import extras
 
-FIN_CSV = '/home/xkezz/projects/alfa_hakaton_DVSN/DB/df_financial_clean.csv'
+FIN_CSV = '/home/xkezz/projects/alfa_hakaton_DVSN/DB/df_financial.csv'
 DB = "alfa-hakaton"
 USER = "postgres"
 PASSWORD = "postgres"
@@ -11,10 +11,24 @@ PORT = 5432
 
 BATCH_SIZE = 5000
 
+def normalize_inn_financial(inn_raw: str) -> str:
+    """
+    Для финансов статуса нет — определяем по длине после int():
+    - 9 цифр → ООО (добавляем 1 ноль слева → 10 цифр)
+    - 10 цифр → ИП (оставляем как есть)
+    """
+    s = inn_raw.strip()
+    if not s.isdigit():
+        return s
+    norm = str(int(s))
+    if len(norm) == 9:
+        return '0' + norm  # ООО: 9 → 10 цифр
+    return norm
+
 conn = psycopg2.connect(dbname=DB, user=USER, password=PASSWORD, host=HOST, port=PORT)
 cur = conn.cursor()
 
-# Get set of valid inn from companies
+# Get set of valid inn from companies (already normalized to 10 digits)
 cur.execute("SELECT inn FROM companies")
 valid_inns = {row[0] for row in cur.fetchall()}
 print(f"Valid inn count: {len(valid_inns)}")
@@ -26,7 +40,9 @@ batch = []
 with open(FIN_CSV, 'r', encoding='utf-8-sig') as f:
     reader = csv.DictReader(f)
     for row in reader:
-        inn = row['inn'].strip()
+        inn_raw = row['inn'].strip()
+        inn = normalize_inn_financial(inn_raw)
+        
         if inn not in valid_inns:
             skipped += 1
             continue
@@ -50,7 +66,7 @@ with open(FIN_CSV, 'r', encoding='utf-8-sig') as f:
             to_num(row['current_assets']),
             to_num(row['total_equity']),
             to_num(row['longterm_debt']),
-            to_num(row['shortterm_dept']),   # CSV typo
+            to_num(row['shortterm_dept']),   # CSV typo: shortterm_dept -> shortterm_debt
             to_num(row['shortterm_liab']),
             to_num(row['retained_earnings']),
             to_num(row['profit_from_sales']),

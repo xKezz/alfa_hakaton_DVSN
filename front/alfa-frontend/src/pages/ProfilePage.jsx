@@ -18,14 +18,33 @@ const EMPTY_FORM = {
   address: "",
 };
 
+/**
+ * Демо-профиль, показываемый, когда в localStorage ещё ничего не сохранено.
+ * Нужен, чтобы у проверяющих сразу были заполнены все поля так же,
+ * как у основного демо-клиента. ИНН всё равно подставится из company.inn.
+ */
+const DEMO_PROFILE = {
+  ...EMPTY_FORM,
+  lastName: "Иванов",
+  firstName: "Иван",
+  middleName: "Иванович",
+  birthDate: "1985-04-12",
+  ogrnip: "304500000000123",
+  businessName: "ИП Иванов",
+  activity: "Торговля",
+  taxSystem: "УСН «Доходы минус расходы»",
+  phone: "+7 (900) 123-45-67",
+  email: "ivanov@example.ru",
+  address: "г. Альфа-центр, ул. Деловая, д. 1, офис 3",
+};
+
 function loadProfile() {
   try {
     const raw = localStorage.getItem("ipProfile");
-    if (!raw) return EMPTY_FORM;
-    const parsed = JSON.parse(raw);
-    return { ...EMPTY_FORM, ...parsed };
+    if (!raw) return DEMO_PROFILE;      // никогда не показываем пустую форму
+    return { ...EMPTY_FORM, ...JSON.parse(raw) };
   } catch {
-    return EMPTY_FORM;
+    return DEMO_PROFILE;
   }
 }
 
