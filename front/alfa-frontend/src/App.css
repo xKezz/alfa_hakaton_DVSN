@@ -1575,7 +1575,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 12px;
   max-width: var(--maxw);
   margin: 0 auto;

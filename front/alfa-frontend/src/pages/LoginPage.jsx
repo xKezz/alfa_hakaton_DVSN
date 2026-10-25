@@ -2,11 +2,6 @@ import { useState } from "react";
 import { loginUser } from "../api.js";
 import { Button, Field } from "../components/ui.jsx";
 
-const DEMO_ACCOUNTS = [
-  { login: "client", password: "client", role: "предприниматель", note: "ИНН 3662277634" },
-  { login: "bank", password: "bank", role: "сотрудник банка", note: "" },
-];
-
 export default function LoginPage({ onLogin }) {
   const [login, setLogin] = useState("");
   const [password, setPassword] = useState("");
@@ -29,7 +24,6 @@ export default function LoginPage({ onLogin }) {
     if (!login.trim()) nextErrors.login = "Введите логин";
     if (!password.trim()) nextErrors.password = "Введите пароль";
     setFieldErrors(nextErrors);
-    setInfo("");
 
     if (Object.keys(nextErrors).length > 0) {
       setError("Заполните логин и пароль");
@@ -60,8 +54,8 @@ export default function LoginPage({ onLogin }) {
       <div className="brand login-brand">
         <div className="brand-logo">А</div>
         <div>
-          <div className="brand-name">Альфа</div>
-          <div className="brand-subtitle">Бизнес-платформа</div>
+          <div className="brand-name">alfa-hakaton-DVSN</div>
+          <div className="brand-subtitle">Кредитная платформа</div>
         </div>
       </div>
 
@@ -117,7 +111,7 @@ export default function LoginPage({ onLogin }) {
             <button
               type="button"
               className="link-btn"
-              onClick={() => setInfo("В демо-режиме восстановление пароля недоступно.")}
+              onClick={() => setInfo("Для восстановления доступа обратитесь к администратору.")}
             >
               Забыли пароль?
             </button>
@@ -131,25 +125,10 @@ export default function LoginPage({ onLogin }) {
           </Button>
         </form>
 
-        <div className="login-demo">
-          <strong>Деморежим.</strong> Тестовые учётные записи:{" "}
-          {DEMO_ACCOUNTS.map((account, index) => (
-            <span key={account.login}>
-              <code>
-                {account.login} / {account.password}
-              </code>{" "}
-              — {account.role}
-              {account.note ? `, ${account.note}` : ""}
-              {index < DEMO_ACCOUNTS.length - 1 ? "; " : "."}
-            </span>
-          ))}{" "}
-          Авторизация выполняется без запроса к банку.
-        </div>
-
-        <p className="login-footer">Безопасные финансовые решения для вашего бизнеса</p>
+        <p className="login-footer">Кредитование для вашего бизнеса</p>
       </main>
 
-      <p className="login-page-footer">© 2026 Альфа · Бизнес-платформа · Демонстрационный прототип</p>
+      <p className="login-page-footer">alfa-hakaton-DVSN</p>
     </div>
   );
 }

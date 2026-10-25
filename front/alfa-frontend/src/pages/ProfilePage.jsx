@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { ApiStatus, Button, Field } from "../components/ui.jsx";
+import { Button, Field } from "../components/ui.jsx";
 import { formatDate } from "../data/mock.js";
 import { createFinancialStatement, getCompany, getFinancialStatements } from "../api.js";
 
@@ -18,33 +18,13 @@ const EMPTY_FORM = {
   address: "",
 };
 
-/**
- * Демо-профиль, показываемый, когда в localStorage ещё ничего не сохранено.
- * Нужен, чтобы у проверяющих сразу были заполнены все поля так же,
- * как у основного демо-клиента. ИНН всё равно подставится из company.inn.
- */
-const DEMO_PROFILE = {
-  ...EMPTY_FORM,
-  lastName: "Иванов",
-  firstName: "Иван",
-  middleName: "Иванович",
-  birthDate: "1985-04-12",
-  ogrnip: "304500000000123",
-  businessName: "ИП Иванов",
-  activity: "Торговля",
-  taxSystem: "УСН «Доходы минус расходы»",
-  phone: "+7 (900) 123-45-67",
-  email: "ivanov@example.ru",
-  address: "г. Альфа-центр, ул. Деловая, д. 1, офис 3",
-};
-
 function loadProfile() {
   try {
     const raw = localStorage.getItem("ipProfile");
-    if (!raw) return DEMO_PROFILE;      // никогда не показываем пустую форму
+    if (!raw) return EMPTY_FORM;
     return { ...EMPTY_FORM, ...JSON.parse(raw) };
   } catch {
-    return DEMO_PROFILE;
+    return EMPTY_FORM;
   }
 }
 
@@ -82,7 +62,7 @@ function financialFromStatement(statement) {
   return values;
 }
 
-export default function ProfilePage({ company, health }) {
+export default function ProfilePage({ company }) {
   const [formData, setFormData] = useState(loadProfile);
   const [saved, setSaved] = useState(false);
 
@@ -266,9 +246,7 @@ export default function ProfilePage({ company, health }) {
             Данные предпринимателя и сведения о бизнесе, привязанные к аккаунту.
           </p>
         </div>
-        <div className="page-head-actions">
-          <ApiStatus health={health} />
-        </div>
+
       </div>
 
       <form className="card card-pad-lg" onSubmit={handleSave} style={{ marginBottom: 20 }}>
@@ -366,7 +344,7 @@ export default function ProfilePage({ company, health }) {
       <section className="card card-pad-lg">
         <h2 className="section-title">Проверка компании по ИНН</h2>
         <p className="page-subtitle" style={{ marginBottom: 18 }}>
-          Сведения запрашиваются из backend (FastAPI + PostgreSQL, таблица companies).
+          Проверьте сведения о компании по ИНН.
         </p>
 
         <form onSubmit={handleLookup}>
@@ -440,7 +418,7 @@ export default function ProfilePage({ company, health }) {
       <section className="card card-pad-lg" style={{ marginTop: 20 }}>
         <h2 className="section-title">Финансовая отчётность</h2>
         <p className="page-subtitle" style={{ marginBottom: 18 }}>
-          Годовая отчётность хранится в PostgreSQL (таблица financial_statements) и загружается через API.
+          Годовая отчётность компании.
         </p>
 
         {isFinancialLoading && (
@@ -575,7 +553,7 @@ export default function ProfilePage({ company, health }) {
       </section>
 
       <p className="hint-sm" style={{ textAlign: "center", marginTop: 20 }}>
-        Данные профиля сохраняются локально в вашем браузере. Это демонстрационный интерфейс.
+        Данные профиля сохраняются в вашем браузере.
       </p>
     </div>
   );

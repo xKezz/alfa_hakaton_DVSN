@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from secrets import token_urlsafe
 from typing import Any
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -33,8 +35,14 @@ class Settings(BaseSettings):
     # CORS: список origins через запятую
     cors_origins: str = "http://localhost:5173,http://127.0.0.1:5173"
 
-    # Секрет для подписи токенов авторизации (для production задать AUTH_SECRET)
-    auth_secret: str = "alfa-hakaton-dev-secret-change-me"
+    # Секрет для подписи Bearer-токенов. Для production задаётся AUTH_SECRET.
+    # Если переменная не задана, генерируется временный секрет процесса:
+    # приложение запускается локально «из коробки», но после рестарта старые
+    # токены становятся недействительными.
+    auth_secret: str = Field(
+        default_factory=lambda: token_urlsafe(48),
+        validation_alias="AUTH_SECRET",
+    )
 
     # PostgreSQL: вариант 1 — единая строка подключения
     database_url: str | None = None

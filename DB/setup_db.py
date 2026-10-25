@@ -53,11 +53,11 @@ from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from psycopg2.extras import execute_values
 
 # ─────────────────────────── Конфигурация ───────────────────────────
-DB_NAME = "alfa-hakaton"
-DB_USER = "postgres"
-DB_PASSWORD = "postgres"
-DB_HOST = "localhost"
-DB_PORT = 5432
+DB_NAME = os.environ.get("PGDATABASE", "alfa-hakaton")
+DB_USER = os.environ.get("PGUSER", "postgres")
+DB_PASSWORD = os.environ.get("PGPASSWORD", "postgres")
+DB_HOST = os.environ.get("PGHOST", "localhost")
+DB_PORT = int(os.environ.get("PGPORT", "5432"))
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 SQL_FILE = os.path.join(BASE_DIR, "DB.sql")

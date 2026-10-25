@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import "./App.css";
 import {
-  checkHealth,
   createEmployeeOffer,
   createLoanApplication,
   decideLoanApplication,
@@ -11,7 +10,7 @@ import {
   getLoanApplications,
   selectLoanOffer,
 } from "./api.js";
-import { ApiStatus, Button, Toast } from "./components/ui.jsx";
+import { Button, Toast } from "./components/ui.jsx";
 import { LOAN_PURPOSES, formatDateTime } from "./data/mock.js";
 import ApplicationDetails from "./pages/ApplicationDetails.jsx";
 import BankWorkspace from "./pages/BankWorkspace.jsx";
@@ -166,7 +165,6 @@ export default function App() {
   const [selectedApplication, setSelectedApplication] = useState(null);
   const [isApplicationLoading, setIsApplicationLoading] = useState(false);
   const [company, setCompany] = useState(null);
-  const [health, setHealth] = useState(null);
   const [toast, setToast] = useState(null);
   const [isApplicationsLoading, setIsApplicationsLoading] = useState(true);
 
@@ -177,10 +175,6 @@ export default function App() {
   function showToast(title, text) {
     setToast({ title, text });
   }
-
-  useEffect(() => {
-    checkHealth().then(setHealth);
-  }, []);
 
   useEffect(() => {
     if (!toast) return undefined;
@@ -421,9 +415,9 @@ export default function App() {
           >
             <div className="brand-logo">А</div>
             <div style={{ textAlign: "left" }}>
-              <div className="brand-name">Альфа</div>
+              <div className="brand-name">alfa-hakaton-DVSN</div>
               <div className="brand-subtitle">
-                {isEmployee ? "Интерфейс сотрудника" : "Бизнес-платформа"}
+                {isEmployee ? "Интерфейс сотрудника" : "Кредитная платформа"}
               </div>
             </div>
           </button>
@@ -462,10 +456,10 @@ export default function App() {
 
       <main>
         {contentView === "calculator" && (
-          <CreditCalculator defaultCompany={company} health={health} onApply={handleApply} />
+          <CreditCalculator defaultCompany={company} onApply={handleApply} />
         )}
 
-        {contentView === "profile" && <ProfilePage company={company} health={health} />}
+        {contentView === "profile" && <ProfilePage company={company} />}
 
         {contentView === "application" && isApplicationLoading && (
           <div className="page">
@@ -512,11 +506,7 @@ export default function App() {
 
       <footer className="app-footer">
         <div className="app-footer-inner">
-          <span>© 2026 Альфа · Бизнес-платформа · Демонстрационный прототип</span>
-          <span className="row" style={{ gap: 12 }}>
-            <span>Данные и условия не являются офертой банка</span>
-            <ApiStatus health={health} />
-          </span>
+          <span>alfa-hakaton-DVSN</span>
         </div>
       </footer>
 

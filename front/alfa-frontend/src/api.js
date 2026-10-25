@@ -90,7 +90,7 @@ export async function loginUser(username, password) {
     return {
       ok: false,
       type: "unavailable",
-      message: "API недоступен. Проверьте, запущен ли backend на " + API_URL + ".",
+      message: "Сервис временно недоступен. Попробуйте позже.",
     };
   }
 
@@ -151,7 +151,7 @@ export async function getCompany(inn) {
       ok: false,
       type: "unavailable",
       message:
-        "API недоступен. Проверьте, запущен ли backend на " + API_URL + ".",
+        "Сервис временно недоступен. Попробуйте позже.",
     };
   }
 
@@ -212,7 +212,7 @@ export async function createFinancialStatement(payload) {
     return {
       ok: false,
       type: "unavailable",
-      message: "API недоступен. Проверьте, запущен ли backend на " + API_URL + ".",
+      message: "Сервис временно недоступен. Попробуйте позже.",
     };
   }
 
@@ -282,7 +282,7 @@ export async function getLatestFinancialStatement(inn) {
     return {
       ok: false,
       type: "unavailable",
-      message: "API недоступен. Проверьте, запущен ли backend на " + API_URL + ".",
+      message: "Сервис временно недоступен. Попробуйте позже.",
     };
   }
 
@@ -333,7 +333,7 @@ export async function getFinancialStatements(inn) {
     return {
       ok: false,
       type: "unavailable",
-      message: "API недоступен. Проверьте, запущен ли backend на " + API_URL + ".",
+      message: "Сервис временно недоступен. Попробуйте позже.",
     };
   }
 
@@ -391,7 +391,7 @@ export async function getLoanProducts({
     return {
       ok: false,
       type: "unavailable",
-      message: "API недоступен. Проверьте, запущен ли backend на " + API_URL + ".",
+      message: "Сервис временно недоступен. Попробуйте позже.",
     };
   }
 
@@ -444,7 +444,7 @@ export async function createLoanApplication(payload, token) {
   } catch {
     return {
       ok: false,
-      message: "API недоступен. Проверьте, запущен ли backend на " + API_URL + ".",
+      message: "Сервис временно недоступен. Попробуйте позже.",
     };
   }
   const { response, payload: body } = result;
@@ -471,7 +471,7 @@ export async function getLoanApplications({ inn, status, limit = 50, token } = {
       headers: authHeaders(token),
     });
   } catch {
-    return { ok: false, message: "API недоступен", applications: [] };
+    return { ok: false, message: "Сервис временно недоступен. Попробуйте позже.", applications: [] };
   }
   const { response, payload } = result;
   if (response.ok && Array.isArray(payload)) {
@@ -492,7 +492,7 @@ export async function getLoanApplication(applicationId, token) {
       headers: authHeaders(token),
     });
   } catch {
-    return { ok: false, message: "API недоступен" };
+    return { ok: false, message: "Сервис временно недоступен. Попробуйте позже." };
   }
   const { response, payload } = result;
   if (response.ok && payload) return { ok: true, application: payload };
@@ -520,7 +520,7 @@ async function updateOffer(applicationId, offerId, action, token) {
       { method: "POST", headers: authHeaders(token) }
     );
   } catch {
-    return { ok: false, message: "API недоступен" };
+    return { ok: false, message: "Сервис временно недоступен. Попробуйте позже." };
   }
   const { response, payload } = result;
   if (response.ok && payload) return { ok: true, application: payload };
@@ -543,7 +543,7 @@ export async function decideLoanApplication(applicationId, payload, token) {
       }
     );
   } catch {
-    return { ok: false, message: "API недоступен" };
+    return { ok: false, message: "Сервис временно недоступен. Попробуйте позже." };
   }
   const { response, payload: body } = result;
   if (response.ok && body) return { ok: true, application: body };
@@ -562,7 +562,7 @@ export async function getLoanProductCatalog(token) {
       headers: authHeaders(token),
     });
   } catch {
-    return { ok: false, products: [], message: "API недоступен" };
+    return { ok: false, products: [], message: "Сервис временно недоступен. Попробуйте позже." };
   }
   const { response, payload } = result;
   if (response.ok && Array.isArray(payload)) {
@@ -588,7 +588,7 @@ export async function createEmployeeOffer(applicationId, payload, token) {
       }
     );
   } catch {
-    return { ok: false, message: "API недоступен" };
+    return { ok: false, message: "Сервис временно недоступен. Попробуйте позже." };
   }
   const { response, payload: body } = result;
   if (response.ok && body) return { ok: true, application: body };

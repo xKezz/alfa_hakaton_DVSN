@@ -366,7 +366,7 @@ function BankApplicationPanel({
               </div>
               <div className="chart-caption">
                 <span>{application.chart[0]?.year}</span>
-                <span>Динамика выручки, демо-данные</span>
+                <span>Динамика выручки</span>
                 <span>{application.chart[application.chart.length - 1]?.year}</span>
               </div>
             </div>

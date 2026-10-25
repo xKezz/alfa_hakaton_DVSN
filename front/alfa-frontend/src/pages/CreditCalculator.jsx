@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ApiStatus, Button, EmptyState, Field, Segmented } from "../components/ui.jsx";
+import { Button, EmptyState, Field, Segmented } from "../components/ui.jsx";
 import { getCompany, getLatestFinancialStatement, getLoanProducts } from "../api.js";
 import {
   BUSINESS_AGE_TYPES,
@@ -54,7 +54,7 @@ function normalizeProduct(product) {
   };
 }
 
-export default function CreditCalculator({ defaultCompany, health, onApply }) {
+export default function CreditCalculator({ defaultCompany, onApply }) {
   const [bizType, setBizType] = useState("ip");
   const [bizAge, setBizAge] = useState("more3");
   const [purpose, setPurpose] = useState(PURPOSE_ALL);
@@ -243,7 +243,7 @@ export default function CreditCalculator({ defaultCompany, health, onApply }) {
     if (statementResult.ok) {
       setFillStatus({
         state: "ok",
-        message: `Данные заполнены из профиля. Финансовые показатели — из отчётности за ${statementResult.statement.report_year} год (PostgreSQL).`,
+        message: `Данные заполнены из профиля. Финансовые показатели — из отчётности за ${statementResult.statement.report_year} год.`,
       });
     } else if (statementResult.type === "not_found") {
       setFillStatus({
@@ -328,11 +328,8 @@ export default function CreditCalculator({ defaultCompany, health, onApply }) {
         <div>
           <h1 className="page-title">Подбор кредита</h1>
           <p className="page-subtitle">
-            Активные продукты из каталога банка (таблица loan_catalog). Расчёты демонстрационные.
+            Подберите кредитный продукт под задачи вашего бизнеса.
           </p>
-        </div>
-        <div className="page-head-actions">
-          <ApiStatus health={health} />
         </div>
       </div>
 
@@ -412,7 +409,7 @@ export default function CreditCalculator({ defaultCompany, health, onApply }) {
           </div>
 
           <p className="hint-sm">
-            Ставки и условия загружаются из loan_catalog (PostgreSQL) и не являются офертой банка.
+            Ставки и условия зависят от выбранного кредитного продукта.
           </p>
         </aside>
 

@@ -189,19 +189,3 @@ export function Timeline({ events, currentTitle }) {
   );
 }
 
-export function ApiStatus({ health }) {
-  if (!health) return null;
-  const databaseOk = health.ok && health.database === "ok";
-  const label = !health.ok
-    ? "API недоступен · демо-данные"
-    : databaseOk
-      ? "API подключён"
-      : "API без БД · демо-данные";
-  const dotClass = databaseOk ? "is-ok" : health.ok ? "api-dot" : "is-error";
-  return (
-    <span className="api-status" title={label}>
-      <span className={`api-dot ${dotClass}`} />
-      {label}
-    </span>
-  );
-}

@@ -6,10 +6,11 @@ import hashlib
 import hmac
 import logging
 import re
+import time
 from typing import Annotated, Literal
 
 import psycopg
-from fastapi import Depends, FastAPI, HTTPException, Path, Query, Response
+from fastapi import Depends, FastAPI, HTTPException, Path, Query, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from psycopg.rows import dict_row
 
@@ -36,6 +37,28 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 settings = get_settings()
+
+# Rate limiting (лёгкий in-memory лимитер: не требует внешних зависимостей
+# и не ломает прямые вызовы `login(...)` в тестах без request).
+_LOGIN_LIMIT_MINUTES = 1
+_LOGIN_LIMIT_MAX_ATTEMPTS = 5
+_login_attempts: dict[str, list[float]] = {}
+
+
+def _check_login_rate_limit(request: Request | None) -> None:
+    """Ограничивает число попыток входа с одного IP (5 в минуту)."""
+    if request is None or request.client is None:
+        return  # прямой вызов без request (тесты) не лимитируется
+    key = request.client.host
+    now = time.time()
+    window = [t for t in _login_attempts.get(key, []) if now - t < _LOGIN_LIMIT_MINUTES * 60]
+    if len(window) >= _LOGIN_LIMIT_MAX_ATTEMPTS:
+        raise HTTPException(
+            status_code=429,
+            detail="Слишком много попыток входа. Попробуйте позже.",
+        )
+    window.append(now)
+    _login_attempts[key] = window
 
 # ООО — 10 цифр, ИП — 12 цифр.
 INN_RE = re.compile(r"^(?:\d{10}|\d{12})$")
@@ -218,12 +241,26 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.cors_origin_list,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
     expose_headers=["X-Loan-Products-Fallback"],
 )
 
 app.include_router(loan_applications_router)
+
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    """Базовые security headers для API (CSP не ломает Swagger UI)."""
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault(
+        "Permissions-Policy", "geolocation=(), microphone=(), camera=()"
+    )
+    response.headers.setdefault("Content-Security-Policy", "frame-ancestors 'none'")
+    return response
 
 
 @app.get("/", response_model=ServiceInfo, summary="Информация о сервисе", tags=["service"])
@@ -253,12 +290,14 @@ def health() -> HealthResponse:
     responses={
         401: {"model": ErrorResponse, "description": "Неверный логин или пароль"},
         422: {"model": ErrorResponse, "description": "Некорректные данные запроса"},
+        429: {"model": ErrorResponse, "description": "Слишком много попыток входа"},
         503: {"model": ErrorResponse, "description": "База данных недоступна"},
     },
     tags=["auth"],
 )
-def login(payload: LoginRequest) -> AuthUser:
+def login(payload: LoginRequest, request: Request = None) -> AuthUser:
     """Проверяет логин и пароль по таблице ``login`` и возвращает профиль пользователя."""
+    _check_login_rate_limit(request)
     try:
         with db.connection() as conn, conn.cursor(row_factory=dict_row) as cur:
             cur.execute(LOGIN_SELECT, {"username": payload.username})
