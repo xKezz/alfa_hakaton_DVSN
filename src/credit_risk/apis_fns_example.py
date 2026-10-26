@@ -59,14 +59,21 @@ class FNSApi:
 
     @staticmethod
     def _load_dotenv_dsn() -> str | None:
-        """Пробует подхватить .env из корня проекта (если установлен python-dotenv)."""
+        """Пробует подхватить .env проекта (если установлен python-dotenv)."""
         try:
             from dotenv import load_dotenv
         except ImportError:
             return None
-        env_path = Path(__file__).resolve().parents[2] / ".env"
-        if env_path.exists():
-            load_dotenv(env_path)
+        # Пакет лежит в src/credit_risk/, поэтому parents[2] — корень репозитория.
+        project_root = Path(__file__).resolve().parents[2]
+        for env_path in (
+            project_root / ".env",
+            project_root / "src" / "backend" / ".env",
+            project_root / "backend" / ".env",  # раскладка до переноса в src/
+        ):
+            if env_path.exists():
+                load_dotenv(env_path)
+                break
         else:
             load_dotenv()
         return os.environ.get("DB_CONNECT") or os.environ.get("DB_DSN")

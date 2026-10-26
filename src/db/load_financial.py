@@ -1,13 +1,16 @@
 import csv
+import os
+
 import psycopg2
 from psycopg2 import extras
 
-FIN_CSV = '/home/xkezz/projects/alfa_hakaton_DVSN/DB/df_financial.csv'
-DB = "alfa-hakaton"
-USER = "postgres"
-PASSWORD = "postgres"
-HOST = "localhost"
-PORT = 5432
+# CSV лежит рядом со скриптом (src/db/df_financial.csv).
+FIN_CSV = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'df_financial.csv')
+DB = os.environ.get("PGDATABASE", "alfa-hakaton")
+USER = os.environ.get("PGUSER", "postgres")
+PASSWORD = os.environ.get("PGPASSWORD", "postgres")
+HOST = os.environ.get("PGHOST", "localhost")
+PORT = int(os.environ.get("PGPORT", "5432"))
 
 BATCH_SIZE = 5000
 

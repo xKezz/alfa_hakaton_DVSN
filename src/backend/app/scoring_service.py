@@ -1,8 +1,8 @@
 """Интеграция существующего алгоритма скоринга с backend.
 
 Все формулы, веса и пороги остаются в `src/credit_risk/*` и
-`src/data/weight.json`. Здесь выполняется только преобразование данных API/БД
-в формат алгоритма, вызов его функций и маршрутизация заявки.
+`src/credit_risk/data/weight.json`. Здесь выполняется только преобразование
+данных API/БД в формат алгоритма, вызов его функций и маршрутизация заявки.
 """
 
 from __future__ import annotations
@@ -16,8 +16,23 @@ from .config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# Корень репозитория: backend/app/scoring_service.py -> parents[2].
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
+# Корень, от которого импортируется пакет `src.credit_risk`.
+#
+# Раскладка репозитория: <repo_root>/src/backend/app/scoring_service.py,
+# поэтому self-parents[3] — корень репозитория. В Docker backend лежит в
+# /app/backend, и корнем импорта становится /app. Чтобы не зависеть от
+# конкретной раскладки, ищем ближайший родительский каталог, содержащий
+# `src/credit_risk`.
+def _detect_import_root() -> Path:
+    here = Path(__file__).resolve()
+    for parent in here.parents:
+        if (parent / "src" / "credit_risk").is_dir():
+            return parent
+    # Фолбэк: <repo_root>/src/backend/app/scoring_service.py -> <repo_root>
+    return here.parents[3]
+
+
+PROJECT_ROOT = _detect_import_root()
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 

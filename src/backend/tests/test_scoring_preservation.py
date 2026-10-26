@@ -9,7 +9,11 @@ import unittest
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
-PROJECT_ROOT = BACKEND_DIR.parent
+# Корень репозитория — ближайший родитель backend/, содержащий src/credit_risk.
+PROJECT_ROOT = next(
+    (parent for parent in BACKEND_DIR.parents if (parent / "src" / "credit_risk").is_dir()),
+    BACKEND_DIR.parent,
+)
 for path in (str(BACKEND_DIR), str(PROJECT_ROOT)):
     if path not in sys.path:
         sys.path.insert(0, path)
@@ -24,11 +28,15 @@ from src.credit_risk.credit_risk_score import Financial_Risk_Score  # noqa: E402
 
 # Хеши зафиксированы до интеграции. Если они изменятся, значит были
 # затронуты формулы/веса/пороги, что запрещено условием задачи.
+#
+# Единственное разрешённое изменение: в config.py после переноса кода в
+# src/credit_risk/ поправлен только путь к весам (WEIGHTS_PATH), сами веса,
+# пороги и справочники не менялись.
 EXPECTED_HASHES = {
     "src/credit_risk/credit_risk_score.py": "420308bd4569f2d0a88e204c54b6fc507c3fc35f7cad5ff3f411a31f12def616",
     "src/credit_risk/credit_category.py": "216a207e7de6c21502effc3570eb4b5754966c60e4389397dbe1918b832f7088",
-    "src/credit_risk/config.py": "8af0a4338632c49fe325dd1382ef41a47c372be37ca63c51813250c6a85f6fcb",
-    "src/data/weight.json": "ac3a8932d68332c886fb4e317b1ba4f89967fd014dc33f0c3b6fa9fc68355d50",
+    "src/credit_risk/config.py": "b5631e3df8066aa4ab2d873b85c98f32493b2f363d272e26fe8d073f292a4bfd",
+    "src/credit_risk/data/weight.json": "ac3a8932d68332c886fb4e317b1ba4f89967fd014dc33f0c3b6fa9fc68355d50",
 }
 
 FINANCIAL = {

@@ -22,22 +22,26 @@ Backend на **Python 3.12 + FastAPI + PostgreSQL** для кредитован�
 ## Структура
 
 ```
-backend/
-├── .env.example        # пример переменных окружения (секретов нет)
-├── .gitignore          # .venv, __pycache__, .env, *.pyc
-├── requirements.txt    # зафиксированные зависимости
-├── README.md
-└── app/
-    ├── __init__.py
-    ├── config.py            # pydantic-settings: DATABASE_URL / PG*, APP_*, CORS_ORIGINS
-    ├── db.py                # psycopg3: connection, ping()
-    ├── main.py              # FastAPI app, CORS, роуты
-    ├── schemas.py           # pydantic-модели запросов/ответов
-    ├── scoring_service.py   # адаптер к существующему алгоритму src/credit_risk
-    └── loan_applications.py # создание заявки, скоринг, авто/ручная проверка
-backend/tests/               # unittest: формулы, маршрутизация, интеграция с БД
-src/credit_risk/             # существующий алгоритм скоринга (формулы не менялись)
-src/data/weight.json         # веса и пороги алгоритма
+src/
+├── backend/                # этот сервис
+│   ├── .env.example        # пример переменных окружения (секретов нет)
+│   ├── .gitignore          # .venv, __pycache__, .env, *.pyc
+│   ├── requirements.txt    # зафиксированные зависимости
+│   ├── README.md
+│   ├── Dockerfile          # образ backend и db-init (контекст — корень репозитория)
+│   ├── app/
+│   │   ├── __init__.py
+│   │   ├── config.py            # pydantic-settings: DATABASE_URL / PG*, APP_*, CORS_ORIGINS
+│   │   ├── db.py                # psycopg3: connection, ping()
+│   │   ├── auth.py              # подписанные Bearer-токены, роли
+│   │   ├── main.py              # FastAPI app, CORS, роуты
+│   │   ├── schemas.py           # pydantic-модели запросов/ответов
+│   │   ├── scoring_service.py   # адаптер к существующему алгоритму src/credit_risk
+│   │   └── loan_applications.py # создание заявки, скоринг, авто/ручная проверка
+│   └── tests/              # unittest: формулы, маршрутизация, интеграция с БД
+├── credit_risk/            # существующий алгоритм скоринга (формулы не менялись)
+│   └── data/weight.json    # веса и пороги алгоритма
+└── db/                     # DB.sql (DDL), setup_db.py, docker_init.py, демо- и полные данные
 ```
 
 ## Требования
@@ -49,7 +53,7 @@ src/data/weight.json         # веса и пороги алгоритма
 ## Установка
 
 ```bash
-cd backend
+cd src/backend
 
 # вариант с uv (рекомендуется)
 uv venv .venv
@@ -61,6 +65,9 @@ python3.12 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
+> Windows: исполняемый файл venv — `.venv\Scripts\python.exe` (например,
+> `.venv\Scripts\python -m pip install -r requirements.txt`).
+
 > Если uv не может писать в свой кэш вне рабочей директории (например, в
 > ограниченной среде), задайте кэш внутри временного каталога:
 > `UV_CACHE_DIR=/tmp/uv-cache uv pip install --python .venv/bin/python -r requirements.txt`.
@@ -68,16 +75,31 @@ python3.12 -m venv .venv
 ## Настройка .env
 
 ```bash
-cd backend
+cd src/backend
 cp .env.example .env
-# откройте .env и укажите реальные параметры подключения
+# файл уже содержит рабочие локальные значения; поменяйте PGPASSWORD,
+# если у вашего PostgreSQL другой пароль
 ```
 
 `.env` находится в `.gitignore`; в репозитории лежит только `.env.example`
-с плейсхолдерами. Поддерживаются два способа задать подключение:
+с плейсхолдерами. Для локального запуска обязательно проверьте:
+
+- **`AUTH_SECRET`** — ключ подписи Bearer-токенов. Без него backend теперь
+  запускается с временным секретом процесса, но после рестарта все токены
+  становятся недействительными. Для стабильной локальной работы и тем более
+  для production задайте свой секрет:
+  ```bash
+  AUTH_SECRET=$(openssl rand -hex 32)
+  echo "AUTH_SECRET=$AUTH_SECRET" >> .env
+  ```
+- **`PGPASSWORD`** — должен совпадать с паролем вашего локального PostgreSQL.
+  Значения по умолчанию (`postgres/postgres`) подходят только для стандартной
+  локальной установки; для другой машины задайте реальный пароль в `.env`.
+
+Поддерживаются два способа задать подключение:
 
 1. **`DATABASE_URL`** (приоритетный) — строка вида
-   `postgresql://user:password@localhost:5432/alfa_hakaton`;
+   `postgresql://user:password@localhost:5432/alfa-hakaton`;
 2. **разрозненные переменные** `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`,
    `PGPASSWORD` — используются, если `DATABASE_URL` не задан.
 
@@ -89,22 +111,32 @@ cp .env.example .env
   `http://localhost:5173,http://127.0.0.1:5173`.
 
 Файл `.env` читается из текущей рабочей директории, поэтому запускайте команды
-из каталога `backend/`.
+из каталога `src/backend/`.
 
 ## База данных
 
-`DB.sql` в корне репозитория — **источник истины по схеме**. Backend его не
-изменяет и не создаёт таблицы автоматически. Примените скрипт к своей БД:
+`src/db/DB.sql` — **источник истины по схеме**. Для локального демо-запуска
+проще одной командой создать БД, схему и демо-данные:
+
+```bash
+# из корня репозитория
+src/backend/.venv/bin/python src/db/setup_db.py
+# Windows: src\backend\.venv\Scripts\python.exe src\db\setup_db.py
+```
+
+Скрипт пересоздаёт таблицы и добавляет 4 демо-компании, 11 продуктов и логины.
+Если БД уже наполнена вашими данными — не запускайте его. Только схему можно
+накатить вручную:
 
 ```bash
 # создать БД (если ещё нет)
-createdb alfa_hakaton
+createdb alfa-hakaton
 
-# применить схему из корня репозитория
-psql -d alfa_hakaton -f ../DB.sql
+# применить схему из каталога src/backend
+psql -d alfa-hakaton -f ../db/DB.sql
 ```
 
-`DB.sql` содержит только DDL и не добавляет демо-данные. Для локальных
+`src/db/DB.sql` содержит только DDL и не добавляет демо-данные. Для локальных
 проверок компании можно вставить вручную, например:
 
 ```sql
@@ -112,8 +144,8 @@ INSERT INTO companies (
     inn, company_name, registration_date, company_status,
     industry, region_code, is_simplified_tax, dissolution_flag
 ) VALUES
-    ('7701234567', 'ООО «Ромашка»', '2015-03-12', 'active', '62', '77', FALSE, FALSE),
-    ('770123456789', 'ИП Иванов Иван Иванович', '2020-07-01', 'active', '47', '50', TRUE, FALSE);
+    ('7701234567', 'ООО «Ромашка»', '2015-03-12', 'ooo', '62', '77', FALSE, FALSE),
+    ('770123456789', 'ИП Иванов Иван Иванович', '2020-07-01', 'ip', '47', '50', TRUE, FALSE);
 ```
 
 В текущей схеме `loan_applications` добавлено неразрушающее поле
@@ -132,7 +164,7 @@ ALTER TABLE loan_applications
 ## Запуск
 
 ```bash
-cd backend
+cd src/backend
 .venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
@@ -151,21 +183,28 @@ cd backend
 
 ## Эндпоинты
 
-| Метод | Путь                                                                | Успех                                                                           | Ошибки                                                                                                                                     |
-| ----- | ------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| GET   | `/`                                                                 | `200` — `{"service":"alfa-hakaton-backend","docs":"/docs"}`                     | —                                                                                                                                          |
-| GET   | `/health`                                                           | всегда `200`, поле `database`: `ok` или `unavailable`                           | —                                                                                                                                          |
-| GET   | `/api/companies/{inn}`                                              | `200` — карточка компании                                                       | `422` — невалидный ИНН, `404` — не найдено, `503` — БД недоступна                                                                          |
-| POST  | `/api/financial-statements`                                         | `201` — сохранённая запись `financial_statements`                               | `404` — компания не найдена, `409` — отчётность за этот год уже есть, `422` — невалидные данные, `503` — БД недоступна                     |
-| GET   | `/api/loan-products`                                                | `200` — список активных продуктов из `loan_catalog` (возможен пустой список)    | `422` — невалидные параметры подбора, `503` — БД недоступна                                                                                |
-| GET   | `/api/financial-statements/{inn}`                                   | `200` — все годовые отчёты компании (по убыванию года, может быть `[]`)         | `422` — невалидный ИНН, `503` — БД недоступна                                                                                              |
-| GET   | `/api/financial-statements/{inn}/latest`                            | `200` — последний по году отчёт компании                                        | `404` — отчётности нет, `422` — невалидный ИНН, `503` — БД недоступна                                                                      |
-| POST  | `/api/loan-applications`                                            | `201` — заявка с результатом скоринга и статусом                                | `404` — компания/продукт не найдены, `422` — невалидные данные, `503` — БД недоступна                                                      |
-| GET   | `/api/loan-applications`                                            | `200` — список заявок; по умолчанию `status=manual_review` (очередь сотрудника) | `422` — недопустимый статус, `503` — БД недоступна                                                                                         |
-| GET   | `/api/loan-applications/{application_id}`                           | `200` — заявка, рейтинг, причина передачи, решение, история                     | `404` — заявка не найдена, `503` — БД недоступна                                                                                           |
-| POST  | `/api/loan-applications/{application_id}/decision`                  | `200` — решение сотрудника по заявке из `manual_review`                         | `403` — не сотрудник, `404` — заявка не найдена, `409` — заявка уже решена автоматически, `422` — невалидные данные, `503` — БД недоступна |
-| POST  | `/api/loan-applications/{application_id}/offers/{offer_id}/select`  | `200` — выбранный оффер, заявка `approved`                                      | `404` — заявка/оффер не найдены, `409` — заявка/оффер не ожидают выбора, `503` — БД недоступна                                             |
-| POST  | `/api/loan-applications/{application_id}/offers/{offer_id}/decline` | `200` — отказ от оффера; при отказе от всех — `rejected`                        | `404` — заявка/оффер не найдены, `409` — заявка/оффер не ожидают выбора, `503` — БД недоступна                                             |
+| Метод | Путь | Успех | Ошибки |
+|---|---|---|---|
+| GET | `/` | `200` — `{"service":"alfa-hakaton-backend","docs":"/docs"}` | — |
+| GET | `/health` | всегда `200`, поле `database`: `ok` или `unavailable` | — |
+| GET | `/api/companies/{inn}` | `200` — карточка компании | `422` — невалидный ИНН, `404` — не найдено, `503` — БД недоступна |
+| POST | `/api/financial-statements` | `201` — сохранённая запись `financial_statements` | `404` — компания не найдена, `409` — отчётность за этот год уже есть, `422` — невалидные данные, `503` — БД недоступна |
+| GET | `/api/loan-products` | `200` — список активных продуктов из `loan_catalog` (возможен пустой список) | `422` — невалидные параметры подбора, `503` — БД недоступна |
+| GET | `/api/financial-statements/{inn}` | `200` — все годовые отчёты компании (по убыванию года, может быть `[]`) | `422` — невалидный ИНН, `503` — БД недоступна |
+| GET | `/api/financial-statements/{inn}/latest` | `200` — последний по году отчёт компании | `404` — отчётности нет, `422` — невалидный ИНН, `503` — БД недоступна |
+| POST | `/api/loan-applications` | `201` — заявка с результатом скоринга и статусом | `404` — компания/продукт не найдены, `422` — невалидные данные, `503` — БД недоступна |
+| GET | `/api/loan-applications` | `200` — список заявок; по умолчанию `status=manual_review` (очередь сотрудника) | `422` — недопустимый статус, `503` — БД недоступна |
+| GET | `/api/loan-applications/{application_id}` | `200` — заявка, рейтинг, причина передачи, решение, история | `404` — заявка не найдена, `503` — БД недоступна |
+| POST | `/api/loan-applications/{application_id}/decision` | `200` — решение сотрудника по заявке из `manual_review` | `403` — не сотрудник, `404` — заявка не найдена, `409` — заявка уже решена автоматически, `422` — невалидные данные, `503` — БД недоступна |
+| POST | `/api/loan-applications/{application_id}/employee-offer` | `201` — индивидуальное предложение сотрудника, заявка `offer_pending` | `403` — не сотрудник, `404` — заявка/продукт не найдены, `409` — заявка не на ручной проверке, `422` — невалидные сумма/срок/продукт, `503` — БД недоступна |
+| POST | `/api/loan-applications/{application_id}/offers/{offer_id}/select` | `200` — выбранный оффер, заявка `approved` | `404` — заявка/оффер не найдены, `409` — заявка/оффер не ожидают выбора, `503` — БД недоступна |
+| POST | `/api/loan-applications/{application_id}/offers/{offer_id}/decline` | `200` — отказ от оффера; при отказе от всех — `rejected` | `404` — заявка/оффер не найдены, `409` — заявка/оффер не ожидают выбора, `503` — БД недоступна |
+
+Авторизация: `POST /api/auth/login` возвращает `access_token`. Защищённые действия
+(заявки, очередь, решения, предложения, выбор оффера) требуют заголовок
+`Authorization: Bearer <access_token>`. Сотрудник определяется по подписанному
+токену на сервере, а не по логину из тела запроса. Предприниматель видит только
+заявки своей компании (`login.company_inn`).
 
 Правила валидации ИНН: только цифры, длина 10 (ООО) или 12 (ИП). Невалидный
 ИНН возвращает `422` с понятным `detail`, например:
@@ -218,9 +257,13 @@ Frontend передаёт `allow_fallback=true`, чтобы не оставля�
 - Ошибка скоринга не приводит к ложному одобрению/отказу: заявка уходит в
   `manual_review` с `has_error = TRUE`.
 - Формулы и веса не изменялись: используются файлы `src/credit_risk/*.py` и
-  `src/data/weight.json` как есть.
+  `src/credit_risk/data/weight.json` как есть.
 
 ## Примеры curl
+
+Демо-данные из `src/db/setup_db.py`: ИП `3662277634` (слабый),
+ИП `7722344211` (средний), ИП `3906398393` (сильный), ООО `0721013581`.
+Защищённые эндпоинты требуют `Authorization: Bearer <access_token>`.
 
 ```bash
 # информация о сервисе
@@ -230,14 +273,9 @@ curl -i http://127.0.0.1:8000/
 curl -i http://127.0.0.1:8000/health
 # {"status":"ok","database":"ok"}
 
-# ООО, ИНН из 10 цифр
-curl -i http://127.0.0.1:8000/api/companies/7701234567
-# {"inn":"7701234567","company_name":"ООО «Ромашка»","registration_date":"2015-03-12",
-#  "company_status":"active","industry":"62","region_code":"77",
-#  "is_simplified_tax":false,"dissolution_flag":false}
-
-# ИП, ИНН из 12 цифр
-curl -i http://127.0.0.1:8000/api/companies/770123456789
+# компания по ИНН (ИП, 10 цифр)
+curl -i http://127.0.0.1:8000/api/companies/7722344211
+# {"inn":"7722344211","company_name":"Company7722344211",...}
 
 # невалидный ИНН -> 422
 curl -i http://127.0.0.1:8000/api/companies/123
@@ -248,10 +286,15 @@ curl -i http://127.0.0.1:8000/api/companies/9999999999
 # нецифровой ИНН -> 422
 curl -i http://127.0.0.1:8000/api/companies/77abc
 
-# сохранить годовую финансовую отчётность -> 201
+# авторизация: получаем Bearer-токен (роли business и employee)
+curl -i -X POST http://127.0.0.1:8000/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"client","password":"client"}'
+
+# сохранить годовую финансовую отчётность -> 201 (за новый год)
 curl -i -X POST http://127.0.0.1:8000/api/financial-statements \
   -H 'Content-Type: application/json' \
-  -d '{"inn":"3257029840","report_year":2025,"revenue":14000000,"net_profit":1900000,
+  -d '{"inn":"7722344211","report_year":2026,"revenue":14000000,"net_profit":1900000,
        "assets":10000000,"current_assets":5500000,"total_equity":3600000,"longterm_debt":1000000,
        "shortterm_debt":1100000,"shortterm_liab":2300000,"retained_earnings":3100000,
        "profit_from_sales":2000000,"before_tax":2200000,"cash_equivalents":900000,
@@ -260,54 +303,70 @@ curl -i -X POST http://127.0.0.1:8000/api/financial-statements \
 # повторная запись за тот же ИНН и год -> 409
 curl -i -X POST http://127.0.0.1:8000/api/financial-statements \
   -H 'Content-Type: application/json' \
-  -d '{"inn":"3257029840","report_year":2025,"revenue":1}'
+  -d '{"inn":"7722344211","report_year":2026,"revenue":1}'
 
 # подбор активных кредитных продуктов из loan_catalog -> 200
-curl -i 'http://127.0.0.1:8000/api/loan-products?amount=4150000&term_months=36&business_category=ip&purpose=equipment&business_age_months=36'
+curl -i 'http://127.0.0.1:8000/api/loan-products?amount=500000&term_months=12&business_category=ip&purpose=development_and_scaling&business_age_months=36'
 # пустой результат, если ничего не подходит
 curl -i 'http://127.0.0.1:8000/api/loan-products?amount=999999999&term_months=36&business_category=ip'
 
 # компания не найдена -> 404
 curl -i -X POST http://127.0.0.1:8000/api/financial-statements \
   -H 'Content-Type: application/json' \
-  -d '{"inn":"9999999999","report_year":2025}' 
+  -d '{"inn":"9999999999","report_year":2025}'
 
-# создать заявку: рейтинг и авто-решение
-curl -i -X POST http://127.0.0.1:8000/api/loan-applications \
+# создать заявку под токеном предпринимателя: рейтинг и авто-решение
+TOKEN=$(curl -s -X POST http://127.0.0.1:8000/api/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"inn":"4217064416","product_id":2,"requested_amount":2000000,
-       "requested_term_months":12,"loan_purpose":"working_capital"}'
+  -d '{"username":"login2","password":"login2"}' | python -c 'import json,sys;print(json.load(sys.stdin)["access_token"])')
 
-# очередь ручной проверки и причина передачи
-curl -i 'http://127.0.0.1:8000/api/loan-applications?status=manual_review'
-curl -i http://127.0.0.1:8000/api/loan-applications/<application_id>
+curl -i -X POST http://127.0.0.1:8000/api/loan-applications \
+  -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{"inn":"7722344211","product_id":2,"requested_amount":500000,
+       "requested_term_months":12,"loan_purpose":"development_and_scaling"}'
+
+# очередь ручной проверки и причина передачи (токен сотрудника bank/bank)
+curl -i 'http://127.0.0.1:8000/api/loan-applications?status=manual_review' \
+  -H "Authorization: Bearer $BANK_TOKEN"
+curl -i http://127.0.0.1:8000/api/loan-applications/<application_id> \
+  -H "Authorization: Bearer $BANK_TOKEN"
+
+# каталог продуктов для формы индивидуального предложения
+curl -i http://127.0.0.1:8000/api/loan-products/catalog \
+  -H "Authorization: Bearer $BANK_TOKEN"
 
 # выбор альтернативного предложения / отказ
-curl -i -X POST http://127.0.0.1:8000/api/loan-applications/<application_id>/offers/<offer_id>/select
-curl -i -X POST http://127.0.0.1:8000/api/loan-applications/<application_id>/offers/<offer_id>/decline
+curl -i -X POST http://127.0.0.1:8000/api/loan-applications/<application_id>/offers/<offer_id>/select \
+  -H "Authorization: Bearer $TOKEN"
+curl -i -X POST http://127.0.0.1:8000/api/loan-applications/<application_id>/offers/<offer_id>/decline \
+  -H "Authorization: Bearer $TOKEN"
 
-# решение сотрудника по заявке из manual_review
+# решение сотрудника по заявке из manual_review (для одобрения нужны сумма и срок)
 curl -i -X POST http://127.0.0.1:8000/api/loan-applications/<application_id>/decision \
+  -H "Authorization: Bearer $BANK_TOKEN" \
   -H 'Content-Type: application/json' \
-  -d '{"decision":"approved","decided_by":"bank","reason":"Проверено сотрудником"}'
+  -d '{"decision":"approved","approved_amount":500000,"approved_term_months":12,
+       "reason":"Проверено сотрудником"}'
 
 # при остановленной БД
 curl -i http://127.0.0.1:8000/health
 # {"status":"ok","database":"unavailable"}
-curl -i http://127.0.0.1:8000/api/companies/7701234567
+curl -i http://127.0.0.1:8000/api/companies/7722344211
 # 503 {"detail":"База данных недоступна"}
 ```
 
 ## Ограничения и заметки
 
 - Реализованы `/health`, компании, продукты, финансовая отчётность, авторизация,
-  заявки, скоринг и ручная проверка. `offer_pending`/офферы не используются
-  в текущем сценарии.
-- Для решения сотрудника проверяется, что `decided_by` — пользователь с
-  `profile_type='employee'` из `login`. Полноценных токенов/сессий в проекте
-  пока нет, поэтому API рассчитан на локальную разработку и демо.
-- Тесты: `cd backend && .venv/bin/python -m unittest discover -s tests -t .`
-  (без БД) и `RUN_DB_TESTS=1 ...` (с реальной PostgreSQL).
+  заявки, скоринг, ручная проверка, альтернативные офферы и индивидуальные
+  предложения сотрудника (`offer_pending`).
+- Сотрудник и предприниматель определяются по подписанному Bearer-токену
+  (`POST /api/auth/login`), а не по логину из тела запроса; поле `decided_by`
+  в теле решения — устаревшее и игнорируется.
+- Тесты: `cd src/backend && .venv/bin/python -m unittest discover -s tests -t .`
+  (без БД) и `RUN_DB_TESTS=1 ...` (с реальной PostgreSQL и демо-набором
+  `src/db/setup_db.py`).
 - Пул соединений не используется: на каждый запрос открывается новое
   подключение psycopg с `connect_timeout=5`. Для хакатонного MVP этого
   достаточно.

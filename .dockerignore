@@ -1,0 +1,14 @@
+# Контекст сборки backend/db-init — корень репозитория (см. docker-compose.yml).
+.git
+.gitignore
+.venv
+.deps
+.pgtest
+.tmp
+__pycache__
+*.pyc
+.env
+.env.*
+src/front/node_modules
+src/front/dist
+**/*.log

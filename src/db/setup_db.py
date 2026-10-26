@@ -7,7 +7,7 @@
     1.  Создаёт БД alfa-hakaton, если её ещё нет (CREATE DATABASE IF NOT EXISTS).
     2.  Сбрасывает предыдущую схему (таблицы удаляются с CASCADE) —
         повторный запуск не ломается.
-    3.  Раскатывает схему из DB/DB.sql (таблицы, ключи, индексы).
+    3.  Раскатывает схему из src/db/DB.sql (таблицы, ключи, индексы).
     4.  Записывает 4 демо-компании (3 ИП + 1 ООО) и их финансовую отчётность —
         это те же компании, что загружаются полным датасетом.
     5.  Записывает 11 кредитных продуктов в loan_catalog.
@@ -17,31 +17,39 @@
 load_companies.py и load_financial.py — этот скрипт создаёт только
 демо-набор для быстрого старта.
 
-Использование:
-    python DB/setup_db.py
+Использование (из корня репозитория):
+    python src/db/setup_db.py
 
 Зависимости: psycopg2-binary, запущенный PostgreSQL на localhost:5432.
 """
 
 # ─────────────────────────── Выбор Python ───────────────────────────
-# Автоматически использует Python из venv проекта (backend/.venv),
+# Автоматически использует Python из venv проекта (src/backend/.venv),
 # если системный Python не имеет psycopg2 — так скрипт работает «из коробки».
 try:
     import psycopg2  # noqa: F401
 except ImportError:
     import os
-    venv_python = os.path.join(os.path.dirname(os.path.abspath(__file__)),
-                               "..", "backend", ".venv", "bin", "python")
-    if os.path.exists(venv_python):
-        import sys
-        sys.path.insert(0, os.path.dirname(venv_python))
+    import sys
+
+    db_dir = os.path.dirname(os.path.abspath(__file__))
+    backend_venv = os.path.join(db_dir, "..", "backend", ".venv")
+    venv_candidates = (
+        os.path.join(backend_venv, "Scripts", "python.exe"),  # Windows
+        os.path.join(backend_venv, "bin", "python"),  # Linux/macOS
+    )
+    venv_python = next((path for path in venv_candidates if os.path.exists(path)), None)
+    if venv_python is not None:
         # Поднимаем текущий процесс на python из venv
         os.execv(venv_python, [venv_python] + sys.argv)
     else:
         sys.exit(
-            "❌ psycopg2 не найден в системном Python, а venv не обнаружен: "
-            "запустите с активным окружением: "
-            "source backend/.venv/bin/activate && python DB/setup_db.py"
+            "❌ psycopg2 не найден в системном Python, а venv src/backend/.venv "
+            "не обнаружен: запустите с активным окружением: "
+            "python -m venv src/backend/.venv && "
+            "src/backend/.venv/Scripts/python -m pip install psycopg2-binary   "
+            "(Windows) или source src/backend/.venv/bin/activate && "
+            "pip install psycopg2-binary (Linux/macOS)"
         )
 
 import hashlib
@@ -51,6 +59,14 @@ import sys
 import psycopg2
 from psycopg2.extensions import ISOLATION_LEVEL_AUTOCOMMIT
 from psycopg2.extras import execute_values
+
+# Консоль Windows по умолчанию cp1251 и не умеет печатать ▶/✅/❌ —
+# принудительно переводим вывод в UTF-8, чтобы скрипт не падал.
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8")
+    except (AttributeError, ValueError):  # перенаправленный/перехваченный вывод
+        pass
 
 # ─────────────────────────── Конфигурация ───────────────────────────
 DB_NAME = os.environ.get("PGDATABASE", "alfa-hakaton")

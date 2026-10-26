@@ -7,25 +7,29 @@
 
 ```
 .
-├── DB/DB.sql                   # DDL PostgreSQL (9 таблиц) — источник истины по схеме
-├── База данных.md              # описание модели данных
-├── Roadmap.md                  # бизнес-процесс кредитного конвейера
-├── StakeHolders and User Stories.md
-├── Схема БД.drawio             # ER-диаграмма
-├── backend/                    # FastAPI + psycopg3 (health, компания по ИНН)
-├── front/alfa-frontend/        # React 19 + Vite 8 (кабинет, калькулятор, интерфейс банка)
-└── front/alfa-frontend/README.md
+├── src/
+│   ├── backend/                 # FastAPI + psycopg3 (health, кабинет, заявки, скоринг)
+│   │   ├── app/                 # приложение: config, db, auth, main, schemas, ...
+│   │   └── tests/               # unittest: формулы, маршрутизация, интеграция с БД
+│   ├── credit_risk/             # существующий алгоритм скоринга (формулы не менялись)
+│   │   └── data/weight.json     # веса и пороги алгоритма
+│   ├── db/                      # DB.sql (DDL, 9 таблиц) — источник истины по схеме,
+│   │                            # setup_db.py, docker_init.py, load_*.py, датасеты
+│   └── front/                   # React 19 + Vite 8 (кабинет, калькулятор, интерфейс банка)
+├── other_info/                  # Roadmap, User Stories, описание модели данных, Схема БД.drawio
+├── docker-compose.yml
+└── README.md
 ```
 
 ## Быстрый старт
 
 Требования: PostgreSQL 14+ с локальным пользователем `postgres`/`postgres`
-(если пароль другой — поправьте `backend/.env` и `DB/setup_db.py`).
+(если пароль другой — поправьте `src/backend/.env` и `src/db/setup_db.py`).
 
 1. **Backend и окружение**:
 
 ```bash
-cd backend
+cd src/backend
 uv venv .venv
 uv pip install --python .venv/bin/python -r requirements.txt
 cp .env.example .env
@@ -34,39 +38,40 @@ cp .env.example .env
 `.env.example` уже содержит рабочие локальные значения:
 `PGDATABASE=alfa-hakaton`, `PGUSER=postgres`, `PGPASSWORD=postgres`,
 `AUTH_SECRET` для dev. Если у вас другой пароль PostgreSQL — измените `PGPASSWORD`
-в `backend/.env`.
+в `src/backend/.env`.
 
 2. **База данных + демо-данные** (4 компании, 11 продуктов, логины):
 
 ```bash
 # из корня репозитория
-backend/.venv/bin/python DB/setup_db.py
+src/backend/.venv/bin/python src/db/setup_db.py
+# Windows: src\backend\.venv\Scripts\python.exe src\db\setup_db.py
 ```
 
-Скрипт создаёт БД `alfa-hakaton`, накатывает `DB/DB.sql`, добавляет демо-данные
+Скрипт создаёт БД `alfa-hakaton`, накатывает `src/db/DB.sql`, добавляет демо-данные
 и логины. Он **пересоздаёт таблицы**, поэтому не запускайте его на БД с вашими
 данными.
 
 3. **Запуск backend**:
 
 ```bash
-cd backend
+cd src/backend
 .venv/bin/uvicorn app.main:app --reload --port 8000
 ```
 
 Проверка: `curl http://127.0.0.1:8000/health` → `{"status":"ok","database":"ok"}`.
-Подробнее — [backend/README.md](backend/README.md).
+Подробнее — [src/backend/README.md](src/backend/README.md).
 
 4. **Frontend**:
 
 ```bash
-cd front/alfa-frontend
+cd src/front
 npm install
 npm run dev                     # http://localhost:5173
 ```
 
-`front/alfa-frontend/.env.example` уже содержит `VITE_API_URL=http://localhost:8000`;
-при необходимости скопируйте его в `.env`. Подробнее — [front/alfa-frontend/README.md](front/alfa-frontend/README.md).
+`src/front/.env.example` уже содержит `VITE_API_URL=http://localhost:8000`;
+при необходимости скопируйте его в `.env`. Подробнее — [src/front/README.md](src/front/README.md).
 
 ## Docker: запуск с нуля
 
@@ -81,7 +86,7 @@ docker compose up --build -d
 - PostgreSQL: внутри сети compose, наружу не публикуется
 
 При первом запуске сервис `db-init` создаёт БД `alfa-hakaton`, применяет
-`DB/DB.sql` и добавляет демо-данные: 4 компании, 11 продуктов и логины
+`src/db/DB.sql` и добавляет демо-данные: 4 компании, 11 продуктов и логины
 `client/client`, `bank/bank`, `login1…login4`. Повторный запуск данные не
 пересоздаёт.
 

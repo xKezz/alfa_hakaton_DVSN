@@ -7,7 +7,8 @@ credit_category.py, apis_fns_example.py и internal_api.py, собраны зд�
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parents[1]  # src/
-WEIGHTS_PATH = BASE_DIR / "data" / "weight.json"
+ALGORITHM_DIR = Path(__file__).resolve().parent  # src/credit_risk/ — каталог самого алгоритма
+WEIGHTS_PATH = ALGORITHM_DIR / "data" / "weight.json"  # src/credit_risk/data/weight.json
 
 # ---------------------------------------------------------------------------
 # БД: списки колонок

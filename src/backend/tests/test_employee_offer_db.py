@@ -8,7 +8,11 @@ import unittest
 from pathlib import Path
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
-PROJECT_ROOT = BACKEND_DIR.parent
+# Корень репозитория — ближайший родитель backend/, содержащий src/credit_risk.
+PROJECT_ROOT = next(
+    (parent for parent in BACKEND_DIR.parents if (parent / "src" / "credit_risk").is_dir()),
+    BACKEND_DIR.parent,
+)
 for path in (str(BACKEND_DIR), str(PROJECT_ROOT)):
     if path not in sys.path:
         sys.path.insert(0, path)
