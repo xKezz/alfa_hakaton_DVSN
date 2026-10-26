@@ -1,8 +1,6 @@
 # alfa-hakaton-DVSN
 
-Решение для кредитного конвейера ИП/ООО: подбор кредитного продукта, расчёт
-кредитного риска, подача заявки, автоматическое или ручное рассмотрение,
-формирование предложений и принятие решения предпринимателем.
+Решение для кредитного конвейера ИП/ООО: подбор кредитного продукта, расчёт кредитного риска, подача заявки, автоматическое или ручное рассмотрение, формирование предложений и принятие решения предпринимателем.
 
 Подробные методические материалы: [src/credit_risk/README.md](src/credit_risk/README.md),
 описание схемы БД: [src/db/README.md](src/db/README.md),
@@ -13,7 +11,8 @@ frontend: [src/front/README.md](src/front/README.md).
 ## Документация и артефакты
 
 - [Архитектурная схема](docs/ARCHITECTURE.md)
-- [Описание API](docs/API.md) · [статический OpenAPI](docs/openapi.json) · Swagger UI: `/docs`
+- [Описание API](docs/API.md)
+- [статический OpenAPI](docs/openapi.json) - https://alfa-hakaton-dvsn.duckdns.org/docs
 - [Коллекция Postman](docs/alfa-hakaton.postman_collection.json)
 - [Диаграмма состояний заявки](docs/APPLICATION_STATES.md)
 - [Модель данных](docs/DATA_MODEL.md)
@@ -47,15 +46,15 @@ Backend не содержит ML/LLM-моделей: скоринг — восп
 
 ## Требования к окружению и версии
 
-| Компонент | Требование / фиксация |
-|---|---|
-| Python | 3.12 (`python:3.12-slim` в Docker) |
-| Node.js | 22 (`src/front/.nvmrc`, `node:22-alpine` в Docker) |
-| PostgreSQL | 14+; в Docker используется `postgres:16-alpine` |
-| Docker | Docker Engine + Compose plugin — для запуска всего стека |
-| Python-зависимости | точные версии в `src/backend/requirements.txt` |
+| Компонент            | Требование / фиксация                                       |
+| -------------------- | ----------------------------------------------------------- |
+| Python               | 3.12 (`python:3.12-slim` в Docker)                          |
+| Node.js              | 22 (`src/front/.nvmrc`, `node:22-alpine` в Docker)          |
+| PostgreSQL           | 14+; в Docker используется `postgres:16-alpine`             |
+| Docker               | Docker Engine + Compose plugin — для запуска всего стека    |
+| Python-зависимости   | точные версии в `src/backend/requirements.txt`              |
 | Frontend-зависимости | lock-файл `src/front/package-lock.json` (lockfileVersion 3) |
-| Nginx | `nginx:1.27-alpine` в Docker |
+| Nginx                | `nginx:1.27-alpine` в Docker                                |
 
 Полные версии Python-пакетов: `src/backend/requirements.txt`; frontend —
 `src/front/package-lock.json`. Для воспроизводимой установки используйте
@@ -115,15 +114,18 @@ docker compose up --build -d
 
 `.env` не коммитится; в репозитории находятся только примеры.
 
-| Переменная | Где используется | Назначение / default |
-|---|---|---|
-| `DATABASE_URL` | backend | полный DSN PostgreSQL; приоритетнее `PG*` |
-| `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD` | backend, db-init | параметры PostgreSQL; dev-default: `localhost:5432`, `alfa-hakaton`, `postgres/postgres` |
-| `AUTH_SECRET` | backend | подпись Bearer-токенов; для production задать случайное значение |
-| `APP_HOST`, `APP_PORT` | backend | адрес/порт приложения |
-| `CORS_ORIGINS` | backend | список origins через запятую |
-| `VITE_API_URL` | frontend | адрес API; вне Docker — `http://localhost:8000`; в Docker `/` через Nginx |
-| `FRONTEND_PORT`, `BACKEND_PORT` | Docker Compose | публикуемые порты; default `8080` и `8000` |
+| Переменная                                                                                                                                                                                | Где используется  | Назначение / default                                                                                                                                                                                      |
+| ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                                                                                                                                                                            | backend           | полный DSN PostgreSQL; приоритетнее `PG*`                                                                                                                                                                 |
+| `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER`, `PGPASSWORD`                                                                                                                                  | backend, db-init  | параметры PostgreSQL; dev-default: `localhost:5432`, `alfa-hakaton`, `postgres/postgres`                                                                                                                  |
+| `AUTH_SECRET`                                                                                                                                                                             | backend           | подпись Bearer-токенов; для production задать случайное значение                                                                                                                                          |
+| `APP_HOST`, `APP_PORT`                                                                                                                                                                    | backend           | адрес/порт приложения                                                                                                                                                                                     |
+| `CORS_ORIGINS`                                                                                                                                                                            | backend           | список origins через запятую                                                                                                                                                                              |
+| `VITE_API_URL`                                                                                                                                                                            | frontend          | адрес API; вне Docker — `http://localhost:8000`; в Docker `/` через Nginx                                                                                                                                 |
+| `FRONTEND_PORT`, `BACKEND_PORT`                                                                                                                                                           | Docker Compose    | публикуемые порты; default `8080` и `8000`                                                                                                                                                                |
+| `AGE_THRESHOLDS`, `PROFIT_FROM_SALES_MARGIN`, `BEFORE_TAX_MARGIN`, `NET_PROFIT_MARGIN`,  `DEBT_TO_EQUITY`, `NET_DEBT_TO_EBITDA`, `DEBT_SERVICE_COVERAGE`, `CFO_TO_REVENUE`, `CFO_TO_DEBT` | Scoring Algorithm | Переменные хранящие границы возможных значений для вычисления финансового рейтинга компании                                                                                                               |
+| `RATING_TO_SCORE`                                                                                                                                                                         | Scoring Algorithm | Нижние пороги для вычисления буквенного рейтинга согласно АКРА «Методология присвоения кредитных рейтингов нефинансовым компаниям по национальной шкале для Российской Федерации» от 17 февраля 2023 года |
+| `PRODUCT_SCORE_WEIGHTS`                                                                                                                                                                   | Scoring Algorithm | Веса факторов в итоговом скоринговом балле продукта.                                                                                                                                                      |
 
 Примеры: `src/backend/.env.example`, `src/front/.env.example`,
 `.env.docker.example`. Для production обязательно замените `AUTH_SECRET` и
@@ -151,6 +153,10 @@ docker compose up --build -d
 оставлены на слабом профиле для проверки отказов и регрессионных сценариев.
 
 ## Сквозной сценарий проверки
+
+[Тестовые сценарии](docs/TEST_SCENARIOS.md) - В данном файле описаны основные тестовые сценарии проверки. 
+
+Один из сквозных сценариев: 
 
 1. Запустите стек: `docker compose up --build -d` (или локальные шаги выше).
 2. Откройте `http://localhost:8080`, войдите как `client / client`.
@@ -180,7 +186,7 @@ docker compose exec db psql -U postgres -d alfa-hakaton -c \
 
 Дополнительно проверяются ветки «Одобрить»/«Отказать» сотрудником и
 автоматический сценарий; повторный выбор/отклонение оффера возвращает `409`.
-
+ 
 ## Тесты
 
 ```bash
@@ -197,10 +203,10 @@ npm run lint
 npm run build
 ```
 
-## Ограничения
+## Принятые решения / Ограничения
 
-- Аутентификация локальная
+* Решение не использовать ML/LLM-алгоритмы и модели было принято ввиду отсутствия размеченного датасета для ООО и ИП. Вместо этого была использована АКРА «Методология присвоения кредитных рейтингов нефинансовым компаниям по национальной шкале для Российской Федерации» от 17 февраля 2023 года, оттуда использовались веса и виды некоторых формул. 
+* Аутентификация локальная
 - ФНС API и банковское ядро смоделированы; реальные внешние запросы не
   выполняются.
 - Кредитные продукты, компании и отчётность в демо-наборе синтетические.
-- Скоринг не является ML-моделью и не заменяет кредитную политику банка.
